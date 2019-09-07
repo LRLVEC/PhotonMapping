@@ -1,0 +1,16 @@
+Program:	DrawColor
+{
+	rayAllocator
+	metalAnyHit
+	metalCloseHit
+	glassAnyHit
+	glassCloseHit
+	diffuseAnyHit
+	diffuseCloseHIt
+	scatterAnyHit
+	scatterCloseHit
+	miss
+	exception
+	attrib
+	attribIndexed
+}
