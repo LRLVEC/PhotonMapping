@@ -7,6 +7,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PhotonMapping", "PhotonMapp
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NewOptiX", "NewOptiX\NewOptiX.vcxproj", "{82756D52-1B85-42D3-BC4C-114EB7931B02}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NewCuda", "NewCuda\NewCuda.vcxproj", "{00FFFE66-07B8-4816-82D1-9EACFC60F9BE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +23,10 @@ Global
 		{82756D52-1B85-42D3-BC4C-114EB7931B02}.Debug|x64.Build.0 = Debug|x64
 		{82756D52-1B85-42D3-BC4C-114EB7931B02}.Release|x64.ActiveCfg = Release|x64
 		{82756D52-1B85-42D3-BC4C-114EB7931B02}.Release|x64.Build.0 = Release|x64
+		{00FFFE66-07B8-4816-82D1-9EACFC60F9BE}.Debug|x64.ActiveCfg = Debug|x64
+		{00FFFE66-07B8-4816-82D1-9EACFC60F9BE}.Debug|x64.Build.0 = Debug|x64
+		{00FFFE66-07B8-4816-82D1-9EACFC60F9BE}.Release|x64.ActiveCfg = Release|x64
+		{00FFFE66-07B8-4816-82D1-9EACFC60F9BE}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -41,10 +41,10 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>$(MY_INCLUDE);$(OPTIX_6_0_0)\include;$(CUDA_PATH)\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(MY_INCLUDE);$(OPTIX_6_0_0)\include;$(CUDA_PATH_V10_1)\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(MY_INCLUDE);$(OPTIX_6_0_0)\include;$(CUDA_PATH)\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(MY_INCLUDE);$(OPTIX_6_0_0)\include;$(CUDA_PATH_V10_1)\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
