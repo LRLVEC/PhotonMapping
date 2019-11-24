@@ -300,75 +300,104 @@ BB0_23:
 )
 {
 	.reg .pred 	%p<4>;
-	.reg .f32 	%f<34>;
-	.reg .b32 	%r<8>;
-	.reg .b64 	%rd<4>;
+	.reg .f32 	%f<54>;
+	.reg .b32 	%r<9>;
+	.reg .b64 	%rd<8>;
 
 
 	// inline asm
-	call (%r1), _optix_get_payload_0, ();
+	call (%rd2), _optix_get_sbt_data_ptr_64, ();
 	// inline asm
 	// inline asm
-	call (%r2), _optix_get_payload_1, ();
+	call (%r1), _optix_read_primitive_idx, ();
 	// inline asm
-	cvt.u64.u32	%rd2, %r1;
-	cvt.u64.u32	%rd3, %r2;
-	bfi.b64 	%rd1, %rd2, %rd3, 32, 32;
+	ld.u64 	%rd3, [%rd2];
+	mul.wide.s32 	%rd4, %r1, 12;
+	add.s64 	%rd5, %rd3, %rd4;
+	ld.f32 	%f10, [%rd5];
+	ld.f32 	%f11, [%rd5+4];
+	ld.f32 	%f12, [%rd5+8];
 	// inline asm
-	call (%f6), _optix_get_ray_tmax, ();
+	call (%r2), _optix_get_payload_0, ();
 	// inline asm
-	rcp.rn.f32 	%f1, %f6;
-	abs.f32 	%f2, %f1;
-	setp.ltu.f32	%p1, %f2, 0f3F0CCCCD;
+	// inline asm
+	call (%r3), _optix_get_payload_1, ();
+	// inline asm
+	cvt.u64.u32	%rd6, %r2;
+	cvt.u64.u32	%rd7, %r3;
+	bfi.b64 	%rd1, %rd6, %rd7, 32, 32;
+	add.f32 	%f13, %f10, 0f3F800000;
+	add.f32 	%f14, %f11, 0f3F800000;
+	add.f32 	%f15, %f12, 0f3F800000;
+	mul.f32 	%f16, %f14, %f14;
+	fma.rn.f32 	%f17, %f13, %f13, %f16;
+	fma.rn.f32 	%f18, %f15, %f15, %f17;
+	sqrt.rn.f32 	%f19, %f18;
+	rcp.rn.f32 	%f20, %f19;
+	mul.f32 	%f1, %f13, %f20;
+	mul.f32 	%f2, %f14, %f20;
+	mul.f32 	%f3, %f15, %f20;
+	// inline asm
+	call (%f9), _optix_get_ray_tmax, ();
+	// inline asm
+	rcp.rn.f32 	%f4, %f9;
+	abs.f32 	%f5, %f4;
+	setp.ltu.f32	%p1, %f5, 0f3F0CCCCD;
 	@%p1 bra 	BB1_2;
 	bra.uni 	BB1_1;
 
 BB1_2:
-	mul.f32 	%f22, %f1, %f1;
-	mov.f32 	%f23, 0fBD57BE66;
-	mov.f32 	%f24, 0f3C86A81B;
-	fma.rn.f32 	%f25, %f24, %f22, %f23;
-	mov.f32 	%f26, 0f3E08677B;
-	fma.rn.f32 	%f27, %f25, %f22, %f26;
-	mov.f32 	%f28, 0fBEAAAA29;
-	fma.rn.f32 	%f29, %f27, %f22, %f28;
-	mul.f32 	%f30, %f22, %f29;
-	fma.rn.f32 	%f31, %f30, %f1, %f1;
-	add.f32 	%f32, %f1, %f1;
-	setp.eq.f32	%p3, %f1, 0f00000000;
-	selp.f32	%f33, %f32, %f31, %p3;
+	mul.f32 	%f36, %f4, %f4;
+	mov.f32 	%f37, 0fBD57BE66;
+	mov.f32 	%f38, 0f3C86A81B;
+	fma.rn.f32 	%f39, %f38, %f36, %f37;
+	mov.f32 	%f40, 0f3E08677B;
+	fma.rn.f32 	%f41, %f39, %f36, %f40;
+	mov.f32 	%f42, 0fBEAAAA29;
+	fma.rn.f32 	%f43, %f41, %f36, %f42;
+	mul.f32 	%f44, %f36, %f43;
+	fma.rn.f32 	%f45, %f44, %f4, %f4;
+	add.f32 	%f46, %f4, %f4;
+	setp.eq.f32	%p3, %f4, 0f00000000;
+	selp.f32	%f53, %f46, %f45, %p3;
 	bra.uni 	BB1_3;
 
 BB1_1:
-	add.f32 	%f9, %f2, %f2;
-	mul.f32 	%f10, %f9, 0f3FB8AA3B;
-	cvt.rzi.f32.f32	%f11, %f10;
-	mov.f32 	%f12, 0fBF317200;
-	fma.rn.f32 	%f13, %f11, %f12, %f9;
-	mov.f32 	%f14, 0fB5BFBE8E;
-	fma.rn.f32 	%f15, %f11, %f14, %f13;
-	mul.f32 	%f16, %f15, 0f3FB8AA3B;
-	ex2.approx.ftz.f32 	%f17, %f16;
-	ex2.approx.f32 	%f18, %f11;
-	mov.f32 	%f19, 0f3F800000;
-	fma.rn.f32 	%f8, %f17, %f18, %f19;
+	add.f32 	%f23, %f5, %f5;
+	mul.f32 	%f24, %f23, 0f3FB8AA3B;
+	cvt.rzi.f32.f32	%f25, %f24;
+	mov.f32 	%f26, 0fBF317200;
+	fma.rn.f32 	%f27, %f25, %f26, %f23;
+	mov.f32 	%f28, 0fB5BFBE8E;
+	fma.rn.f32 	%f29, %f25, %f28, %f27;
+	mul.f32 	%f30, %f29, 0f3FB8AA3B;
+	ex2.approx.ftz.f32 	%f31, %f30;
+	ex2.approx.f32 	%f32, %f25;
+	mov.f32 	%f33, 0f3F800000;
+	fma.rn.f32 	%f22, %f31, %f32, %f33;
 	// inline asm
-	rcp.approx.ftz.f32 %f7,%f8;
+	rcp.approx.ftz.f32 %f21,%f22;
 	// inline asm
-	mov.f32 	%f20, 0fC0000000;
-	fma.rn.f32 	%f21, %f7, %f20, %f19;
-	mov.b32 	 %r3, %f21;
-	setp.ltu.f32	%p2, %f2, 0f42B00000;
-	selp.b32	%r4, %r3, 1065353216, %p2;
-	mov.b32 	 %r5, %f1;
-	and.b32  	%r6, %r5, -2147483648;
-	or.b32  	%r7, %r4, %r6;
-	mov.b32 	 %f33, %r7;
+	mov.f32 	%f34, 0fC0000000;
+	fma.rn.f32 	%f35, %f21, %f34, %f33;
+	mov.b32 	 %r4, %f35;
+	setp.ltu.f32	%p2, %f5, 0f42B00000;
+	selp.b32	%r5, %r4, 1065353216, %p2;
+	mov.b32 	 %r6, %f4;
+	and.b32  	%r7, %r6, -2147483648;
+	or.b32  	%r8, %r5, %r7;
+	mov.b32 	 %f53, %r8;
 
 BB1_3:
-	st.f32 	[%rd1], %f33;
-	st.f32 	[%rd1+4], %f33;
-	st.f32 	[%rd1+8], %f33;
+	mul.f32 	%f47, %f1, 0f3F000000;
+	mul.f32 	%f48, %f47, %f53;
+	st.f32 	[%rd1], %f48;
+	mul.f32 	%f49, %f2, 0f3F000000;
+	mul.f32 	%f50, %f49, %f53;
+	st.f32 	[%rd1+4], %f50;
+	mul.f32 	%f51, %f3, 0f3F000000;
+	mul.f32 	%f52, %f51, %f53;
+	st.f32 	[%rd1+8], %f52;
 	ret;
 }
 
