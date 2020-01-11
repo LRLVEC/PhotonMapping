@@ -41,7 +41,7 @@ extern "C" __global__ void __closesthit__Ahh()
 	unsigned int pd0, pd1;
 	pd0 = optixGetPayload_0();
 	pd1 = optixGetPayload_1();
-	*(float3*)uP(pd0, pd1) = /*normalize(n + 1)/2 **/ make_float3(tanh(1 / optixGetRayTmax()));
+	*(float3*)uP(pd0, pd1) = normalize(n + 1)/2 * make_float3(tanh(1 / optixGetRayTmax()));
 }
 extern "C" __global__ void __miss__Ahh()
 {
