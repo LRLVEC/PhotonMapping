@@ -22,7 +22,7 @@ extern "C" __global__ void __raygen__RayAllocator()
 		dot(paras.trans->row0, d),
 		dot(paras.trans->row1, d),
 		dot(paras.trans->row2, d)));
-	unsigned int pd0, pd1; 
+	unsigned int pd0, pd1;
 	pP(&color, pd0, pd1);
 	optixTrace(paras.handle, paras.trans->r0, dd,
 		0.001f, 1e16f,
@@ -41,7 +41,7 @@ extern "C" __global__ void __closesthit__Ahh()
 	unsigned int pd0, pd1;
 	pd0 = optixGetPayload_0();
 	pd1 = optixGetPayload_1();
-	*(float3*)uP(pd0, pd1) = normalize(n + 1)/2 * make_float3(tanh(1 / optixGetRayTmax()));
+	*(float3*)uP(pd0, pd1) = normalize(n + 1) / 2 * make_float3(tanh(20.0 / optixGetRayTmax()));
 }
 extern "C" __global__ void __miss__Ahh()
 {
