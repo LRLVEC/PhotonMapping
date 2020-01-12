@@ -66,7 +66,7 @@ namespace OpenGL
 				sbt(),
 				frameBuffer(*dr),
 				parasBuffer(paras, false),
-				box(_sourceManager->folder.find("resources/box.stl").readSTL()),
+				box(_sourceManager->folder.find("resources/teapot.stl").readSTL()),
 				vertices(CUDA::Buffer::Device),
 				normals(CUDA::Buffer::Device),
 				triangleBuildInput({}),
@@ -110,7 +110,7 @@ namespace OpenGL
 				emitProperty.result = (CUdeviceptr)((char*)compation.device + compactedSizeOffset);
 
 				optixAccelBuild(context, 0,
-					&accelOptions, &triangleBuildInput, 1,// num build inputs
+					&accelOptions, &triangleBuildInput, 1,// num build inputs, which is the num of vertexBuffers pointers
 					temp, GASBufferSizes.tempSizeInBytes,
 					compation, GASBufferSizes.outputSizeInBytes,
 					&GASHandle, &emitProperty, 1);
@@ -290,7 +290,7 @@ int main()
 	Window::WindowManager wm(winPara);
 	OpenGL::PathTracing pathTracer(winPara.size.size);
 	wm.init(0, &pathTracer);
-	glfwSwapInterval(0);
+	glfwSwapInterval(1);
 	FPS fps;
 	fps.refresh();
 	while (!wm.close())
