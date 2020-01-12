@@ -59,7 +59,7 @@ namespace OpenGL
 				miss(Vector<String<char>>("__miss__Ahh"), Program::Miss, &programGroupOptions, context, &mm),
 				closestHit(Vector<String<char>>("__closesthit__Ahh"), Program::HitGroup, &programGroupOptions, context, &mm),
 				pipelineLinkOptions{ 2,OPTIX_COMPILE_DEBUG_LEVEL_NONE,false },
-				pip(context, &pipelineCompileOptions, &pipelineLinkOptions, { rayAllocator ,closestHit,miss }),
+				pip(context, &pipelineCompileOptions, &pipelineLinkOptions, { rayAllocator ,closestHit, miss }),
 				raygenDataBuffer(raygenData, false),
 				missDataBuffer(missData, false),
 				hitDataBuffer(hitData, false),
@@ -75,6 +75,7 @@ namespace OpenGL
 			{
 				box.getVerticesRepeated();
 				box.getNormals();
+				box.printInfo(false);
 				vertices.copy(box.verticesRepeated.data, sizeof(Math::vec3<float>)* box.verticesRepeated.length);
 				normals.copy(box.normals.data, sizeof(Math::vec3<float>)* box.normals.length);
 				uint32_t triangle_input_flags[1] =  // One per SBT record for this build input
@@ -282,14 +283,14 @@ int main()
 	{
 		"PathTracer",
 		{
-			{1920,1080},
+			{640,360},
 			true,false
 		}
 	};
 	Window::WindowManager wm(winPara);
 	OpenGL::PathTracing pathTracer(winPara.size.size);
 	wm.init(0, &pathTracer);
-	glfwSwapInterval(1);
+	glfwSwapInterval(0);
 	FPS fps;
 	fps.refresh();
 	while (!wm.close())
