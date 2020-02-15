@@ -2,7 +2,7 @@
 #ifdef DefineDevice
 #include <OptiX/_Define_7_Device.h>
 #else
-using TransInfo = OpenGL::OptiX::Trans::TransInfo;
+using TransInfo = CUDA::OptiX::Trans::TransInfo;
 #endif
 enum RayType
 {

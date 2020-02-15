@@ -93,6 +93,7 @@
     <CudaCompile Include="Draw.cu" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\include\OptiX\_OptiX_7.h" />
     <ClInclude Include="Define.h" />
   </ItemGroup>
   <ItemGroup>

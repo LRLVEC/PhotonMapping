@@ -9,7 +9,7 @@
 #include <_Time.h>
 #include <_STL.h>
 
-namespace OpenGL
+namespace CUDA
 {
 	namespace OptiX
 	{
@@ -28,22 +28,22 @@ namespace OpenGL
 			SbtRecord<RayData> raygenData;
 			SbtRecord<int> missData;
 			SbtRecord<CloseHitData> hitData;
-			CUDA::Buffer raygenDataBuffer;
-			CUDA::Buffer missDataBuffer;
-			CUDA::Buffer hitDataBuffer;
+			Buffer raygenDataBuffer;
+			Buffer missDataBuffer;
+			Buffer hitDataBuffer;
 			OptixShaderBindingTable sbt;
-			CUDA::Buffer frameBuffer;
+			Buffer frameBuffer;
 			CUstream cuStream;
 			Parameters paras;
-			CUDA::Buffer parasBuffer;
+			Buffer parasBuffer;
 			STL box;
-			CUDA::Buffer vertices;
-			CUDA::Buffer normals;
+			Buffer vertices;
+			Buffer normals;
 			OptixBuildInput triangleBuildInput;
 			OptixAccelBuildOptions accelOptions;
-			CUDA::Buffer GASOutput;
+			Buffer GASOutput;
 			OptixTraversableHandle GASHandle;
-			PathTracing(SourceManager* _sourceManager, DefautRenderer* dr, FrameScale const& _size, void* transInfoDevice)
+			PathTracing(OpenGL::SourceManager* _sourceManager, OpenGL::OptiXDefautRenderer* dr, OpenGL::FrameScale const& _size, void* transInfoDevice)
 				:
 				context(),
 				moduleCompileOptions{
@@ -67,11 +67,11 @@ namespace OpenGL
 				frameBuffer(*dr),
 				parasBuffer(paras, false),
 				box(_sourceManager->folder.find("resources/teapot.stl").readSTL()),
-				vertices(CUDA::Buffer::Device),
-				normals(CUDA::Buffer::Device),
+				vertices(Buffer::Device),
+				normals(Buffer::Device),
 				triangleBuildInput({}),
 				accelOptions({}),
-				GASOutput(CUDA::Buffer::Device)
+				GASOutput(Buffer::Device)
 			{
 				box.getVerticesRepeated();
 				box.getNormals();
@@ -97,8 +97,8 @@ namespace OpenGL
 				accelOptions.buildFlags = OPTIX_BUILD_FLAG_ALLOW_COMPACTION;
 				accelOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
 
-				CUDA::Buffer temp(CUDA::Buffer::Device);
-				CUDA::Buffer compation(CUDA::Buffer::Device);
+				Buffer temp(Buffer::Device);
+				Buffer compation(Buffer::Device);
 				OptixAccelBufferSizes GASBufferSizes;
 				optixAccelComputeMemoryUsage(context, &accelOptions, &triangleBuildInput, 1, &GASBufferSizes);
 				temp.resize(GASBufferSizes.tempSizeInBytes);
@@ -121,13 +121,10 @@ namespace OpenGL
 				if (compacted_gas_size < GASBufferSizes.outputSizeInBytes)
 				{
 					GASOutput.resize(compacted_gas_size);
-					// use handle as input and output
+					// use handle as input and output-
 					optixAccelCompact(context, 0, GASHandle, GASOutput, compacted_gas_size, &GASHandle);
 				}
-				else
-				{
-					GASOutput.copy(compation);
-				}
+				else GASOutput.copy(compation);
 				paras.handle = GASHandle;
 				paras.trans = (TransInfo*)transInfoDevice;
 				/*OptixStackSizes stackSizes = { 0 };
@@ -174,7 +171,7 @@ namespace OpenGL
 				optixLaunch(pip, cuStream, parasBuffer, sizeof(Parameters), &sbt, paras.size.x, paras.size.y, 1);
 				frameBuffer.unmap();
 			}
-			virtual void resize(FrameScale const& _size, GLuint _gl)
+			virtual void resize(OpenGL::FrameScale const& _size, GLuint _gl)
 			{
 				frameBuffer.resize(_gl);
 				frameBuffer.map();
@@ -185,13 +182,16 @@ namespace OpenGL
 			}
 		};
 	}
+}
+namespace OpenGL
+{
 	struct PathTracing :OpenGL
 	{
 		SourceManager sm;
-		DefautRenderer renderer;
+		OptiXDefautRenderer renderer;
 		//CUDA::Buffer test;
-		OptiX::Trans trans;
-		OptiX::PathTracing pathTracer;
+		CUDA::OptiX::Trans trans;
+		CUDA::OptiX::PathTracing pathTracer;
 		PathTracing(FrameScale const& _size)
 			:
 			sm(),
