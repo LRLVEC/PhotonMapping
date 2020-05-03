@@ -66,7 +66,7 @@ namespace OpenGL
 				sbt(),
 				frameBuffer(*dr),
 				parasBuffer(paras, false),
-				box(_sourceManager->folder.find("resources/box.stl").readSTL()),
+				box(_sourceManager->folder.find("resources/Stanford_bunny_3.stl").readSTL()),
 				vertices(CUDA::Buffer::Device),
 				normals(CUDA::Buffer::Device),
 				triangleBuildInput({}),
@@ -289,7 +289,7 @@ int main()
 	Window::WindowManager wm(winPara);
 	OpenGL::PathTracing pathTracer(winPara.size.size);
 	wm.init(0, &pathTracer);
-	glfwSwapInterval(1);
+	glfwSwapInterval(0);
 	FPS fps;
 	fps.refresh();
 	while (!wm.close())

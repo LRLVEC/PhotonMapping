@@ -63,6 +63,7 @@
       <NvccCompilation>ptx</NvccCompilation>
       <GPUDebugInfo>false</GPUDebugInfo>
       <CodeGeneration>compute_75,sm_75</CodeGeneration>
+      <CompileOut>ptx\%(Filename).ptx</CompileOut>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -85,6 +86,7 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <NvccCompilation>ptx</NvccCompilation>
       <CodeGeneration>compute_75,sm_75</CodeGeneration>
+      <CompileOut>ptx\%(Filename).ptx</CompileOut>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
