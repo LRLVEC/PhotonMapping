@@ -62,7 +62,7 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <NvccCompilation>ptx</NvccCompilation>
       <GPUDebugInfo>false</GPUDebugInfo>
-      <CodeGeneration>compute_75,sm_75</CodeGeneration>
+      <CodeGeneration>compute_61,sm_61</CodeGeneration>
       <CompileOut>ptx\%(Filename).ptx</CompileOut>
     </CudaCompile>
   </ItemDefinitionGroup>
@@ -85,7 +85,7 @@
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <NvccCompilation>ptx</NvccCompilation>
-      <CodeGeneration>compute_75,sm_75</CodeGeneration>
+      <CodeGeneration>compute_61,sm_61</CodeGeneration>
       <CompileOut>ptx\%(Filename).ptx</CompileOut>
     </CudaCompile>
   </ItemDefinitionGroup>
@@ -93,6 +93,7 @@
     <CudaCompile Include="Draw.cu" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\include\OptiX\_OptiX_7.h" />
     <ClInclude Include="Define.h" />
   </ItemGroup>
   <ItemGroup>
