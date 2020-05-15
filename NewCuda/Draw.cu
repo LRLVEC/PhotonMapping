@@ -219,7 +219,7 @@ extern "C" __global__ void __raygen__Gather()
 {
 	uint2 index = make_uint2(optixGetLaunchIndex());
 
-	paras.image[index.y * paras.size.x + index.x] = make_float4(0.5f, 0.5f, 0.5f, 1.0f);
+	paras.image[index.y * paras.size.x + index.x] = make_float4(.0f, 1.f, .0f, 1.0f);
 	return;
 
 	Gather_RayGenData* gather_raygenData = (Gather_RayGenData*)optixGetSbtDataPointer();

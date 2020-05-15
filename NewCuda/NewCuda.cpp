@@ -307,6 +307,7 @@ namespace CUDA
 				// photon trace sbt binding
 				lightSource.position = { 5.0f, 5.0f, 5.0f };
 				lightSource.direction = make_float3(-1.0f, -1.0f, -1.0f);
+				lightSource.power = { 1.0f,1.0f,1.0f };
 				lightSource.type = LightSource::SPOT;
 				lightSourceBuffer.copy(lightSource);
 
@@ -355,9 +356,9 @@ namespace CUDA
 			virtual void run()
 			{
 				frameBuffer.map();
-				optixLaunch(rt_pip, cuStream, parasBuffer, sizeof(Parameters), &rt_sbt, paras.size.x, paras.size.y, 1);
-				optixLaunch(pt_pip, cuStream, parasBuffer, sizeof(Parameters), &pt_sbt, paras.pt_size.x, paras.pt_size.y, 1);
-				createPhotonMap(pt_photonBuffer, photonMap);
+				//optixLaunch(rt_pip, cuStream, parasBuffer, sizeof(Parameters), &rt_sbt, paras.size.x, paras.size.y, 1);
+				//optixLaunch(pt_pip, cuStream, parasBuffer, sizeof(Parameters), &pt_sbt, paras.pt_size.x, paras.pt_size.y, 1);
+				//createPhotonMap(pt_photonBuffer, photonMap);
 				optixLaunch(gather_pip, cuStream, parasBuffer, sizeof(Parameters), &gather_sbt, paras.size.x, paras.size.y, 1);
 				frameBuffer.unmap();
 			}

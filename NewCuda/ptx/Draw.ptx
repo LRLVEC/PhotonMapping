@@ -1167,8 +1167,8 @@ BB4_7:
 	mul.wide.u32 	%rd3, %r5, 16;
 	add.s64 	%rd4, %rd2, %rd3;
 	mov.f32 	%f1, 0f3F800000;
-	mov.f32 	%f2, 0f3F000000;
-	st.global.v4.f32 	[%rd4], {%f2, %f2, %f2, %f1};
+	mov.f32 	%f2, 0f00000000;
+	st.global.v4.f32 	[%rd4], {%f2, %f1, %f2, %f1};
 	ret;
 }
 
