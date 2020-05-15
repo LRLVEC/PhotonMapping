@@ -320,8 +320,6 @@ extern "C" __global__ void __raygen__Gather()
 	float3 finalColor = indirectFlux + directFlux;
 	paras.image[index.y * paras.size.x + index.x] = make_float4(finalColor, 1.0f);
 }
-
-
 extern "C" __global__ void __closesthit__ShadowRayHit()
 {
 	unsigned int pd0, pd1;

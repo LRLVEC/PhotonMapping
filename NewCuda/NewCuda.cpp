@@ -134,69 +134,54 @@ namespace CUDA
 			PathTracing(OpenGL::SourceManager* _sourceManager, OpenGL::OptiXDefautRenderer* dr, OpenGL::FrameScale const& _size, void* transInfoDevice)
 				:
 				context(),
-				rt_moduleCompileOptions{
-					OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-					OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
-					OPTIX_COMPILE_DEBUG_LEVEL_NONE },
-					pt_moduleCompileOptions{
-						OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-						OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
-						OPTIX_COMPILE_DEBUG_LEVEL_NONE },
-						gather_moduleCompileOptions{
-							OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-							OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
-							OPTIX_COMPILE_DEBUG_LEVEL_NONE },
-							rt_pipelineCompileOptions{ false,
-								OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-								3,2,OPTIX_EXCEPTION_FLAG_NONE,"paras" },
-								pt_pipelineCompileOptions{ false,
-									OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-									3,2,OPTIX_EXCEPTION_FLAG_NONE,"paras" },
-									gather_pipelineCompileOptions{ false,
-										OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-										3,2,OPTIX_EXCEPTION_FLAG_NONE,"paras" },
-										mm(&_sourceManager->folder, context, &rt_moduleCompileOptions, &rt_pipelineCompileOptions),
-										rt_programGroupOptions{},
-										pt_programGroupOptions{},
-										gather_programGroupOptions{},
-										rt_rayAllocator(Vector<String<char>>("__raygen__RayAllocator"), Program::RayGen, &rt_programGroupOptions, context, &mm),
-										rt_miss(Vector<String<char>>("__miss__Ahh"), Program::Miss, &rt_programGroupOptions, context, &mm),
-										rt_closestHit(Vector<String<char>>("__closesthit__RayHit"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
-										pt_photonEmit(Vector<String<char>>("__raygen__PhotonEmit"), Program::RayGen, &pt_programGroupOptions, context, &mm),
-										pt_photonHit(Vector<String<char>>("__closesthit__PhotonHit"), Program::HitGroup, &pt_programGroupOptions, context, &mm),
-										gather_gather(Vector<String<char>>("__raygen__Gather"), Program::RayGen, &gather_programGroupOptions, context, &mm),
-										gather_shadowRayHit(Vector<String<char>>("__closesthit__ShadowRayHit"), Program::HitGroup, &gather_programGroupOptions, context, &mm),
-										rt_pipelineLinkOptions{ 2,OPTIX_COMPILE_DEBUG_LEVEL_NONE,false },
-										pt_pipelineLinkOptions{ 2,OPTIX_COMPILE_DEBUG_LEVEL_NONE,false },
-										gather_pipelineLinkOptions{ 2,OPTIX_COMPILE_DEBUG_LEVEL_NONE,false },
-										rt_pip(context, &rt_pipelineCompileOptions, &rt_pipelineLinkOptions, { rt_rayAllocator ,rt_closestHit, rt_miss }),
-										pt_pip(context, &pt_pipelineCompileOptions, &pt_pipelineLinkOptions, { pt_photonEmit ,pt_photonHit }),
-										gather_pip(context, &gather_pipelineCompileOptions, &gather_pipelineLinkOptions, {  }),
-										lightSourceBuffer(lightSource, false),
-										rt_raygenDataBuffer(rt_raygenData, false),
-										rt_missDataBuffer(rt_missData, false),
-										rt_hitDataBuffer(rt_hitData, false),
-										cameraRayHitBuffer(Buffer::Device),
-										pt_photonBuffer(Buffer::Device),
-										pt_raygenDataBuffer(pt_raygenData, false),
-										pt_hitDataBuffer(pt_hitData, false),
-										gather_raygenDataBuffer(gather_raygenData, false),
-										gather_hitDataBuffer(gather_hitData, false),
-										photonMap(Buffer::Device),
-										rt_sbt(),
-										pt_sbt(),
-										gather_sbt(),
-										frameBuffer(*dr),
-										parasBuffer(paras, false),
-										box(_sourceManager->folder.find("resources/teapot.stl").readSTL()),
-										vertices(Buffer::Device),
-										normals(Buffer::Device),
-										colors(Buffer::Device),
-										kd(Buffer::Device),
-										attenKd(Buffer::Device),
-										triangleBuildInput({}),
-										accelOptions({}),
-										GASOutput(Buffer::Device)
+				rt_moduleCompileOptions{ OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,OPTIX_COMPILE_OPTIMIZATION_DEFAULT,OPTIX_COMPILE_DEBUG_LEVEL_NONE },
+				pt_moduleCompileOptions{ OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,OPTIX_COMPILE_OPTIMIZATION_DEFAULT,OPTIX_COMPILE_DEBUG_LEVEL_NONE },
+				gather_moduleCompileOptions{ OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,OPTIX_COMPILE_OPTIMIZATION_DEFAULT,OPTIX_COMPILE_DEBUG_LEVEL_NONE },
+				rt_pipelineCompileOptions{ false,OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,3,2,OPTIX_EXCEPTION_FLAG_NONE,"paras" },
+				pt_pipelineCompileOptions{ false,OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,3,2,OPTIX_EXCEPTION_FLAG_NONE,"paras" },
+				gather_pipelineCompileOptions{ false,OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,3,2,OPTIX_EXCEPTION_FLAG_NONE,"paras" },
+				mm(&_sourceManager->folder, context, &rt_moduleCompileOptions, &rt_pipelineCompileOptions),
+				rt_programGroupOptions{},
+				pt_programGroupOptions{},
+				gather_programGroupOptions{},
+				rt_rayAllocator(Vector<String<char>>("__raygen__RayAllocator"), Program::RayGen, &rt_programGroupOptions, context, &mm),
+				rt_miss(Vector<String<char>>("__miss__Ahh"), Program::Miss, &rt_programGroupOptions, context, &mm),
+				rt_closestHit(Vector<String<char>>("__closesthit__RayHit"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
+				pt_photonEmit(Vector<String<char>>("__raygen__PhotonEmit"), Program::RayGen, &pt_programGroupOptions, context, &mm),
+				pt_photonHit(Vector<String<char>>("__closesthit__PhotonHit"), Program::HitGroup, &pt_programGroupOptions, context, &mm),
+				gather_gather(Vector<String<char>>("__raygen__Gather"), Program::RayGen, &gather_programGroupOptions, context, &mm),
+				gather_shadowRayHit(Vector<String<char>>("__closesthit__ShadowRayHit"), Program::HitGroup, &gather_programGroupOptions, context, &mm),
+				rt_pipelineLinkOptions{ 2,OPTIX_COMPILE_DEBUG_LEVEL_NONE,false },
+				pt_pipelineLinkOptions{ 2,OPTIX_COMPILE_DEBUG_LEVEL_NONE,false },
+				gather_pipelineLinkOptions{ 2,OPTIX_COMPILE_DEBUG_LEVEL_NONE,false },
+				rt_pip(context, &rt_pipelineCompileOptions, &rt_pipelineLinkOptions, { rt_rayAllocator ,rt_closestHit, rt_miss }),
+				pt_pip(context, &pt_pipelineCompileOptions, &pt_pipelineLinkOptions, { pt_photonEmit ,pt_photonHit }),
+				gather_pip(context, &gather_pipelineCompileOptions, &gather_pipelineLinkOptions, { gather_gather, gather_shadowRayHit }),
+				lightSourceBuffer(lightSource, false),
+				rt_raygenDataBuffer(rt_raygenData, false),
+				rt_missDataBuffer(rt_missData, false),
+				rt_hitDataBuffer(rt_hitData, false),
+				cameraRayHitBuffer(Buffer::Device),
+				pt_photonBuffer(Buffer::Device),
+				pt_raygenDataBuffer(pt_raygenData, false),
+				pt_hitDataBuffer(pt_hitData, false),
+				gather_raygenDataBuffer(gather_raygenData, false),
+				gather_hitDataBuffer(gather_hitData, false),
+				photonMap(Buffer::Device),
+				rt_sbt(),
+				pt_sbt(),
+				gather_sbt(),
+				frameBuffer(*dr),
+				parasBuffer(paras, false),
+				box(_sourceManager->folder.find("resources/teapot.stl").readSTL()),
+				vertices(Buffer::Device),
+				normals(Buffer::Device),
+				colors(Buffer::Device),
+				kd(Buffer::Device),
+				attenKd(Buffer::Device),
+				triangleBuildInput({}),
+				accelOptions({}),
+				GASOutput(Buffer::Device)
 			{
 				box.getVerticesRepeated();
 				box.getNormals();
@@ -231,7 +216,7 @@ namespace CUDA
 				triangleBuildInput.triangleArray.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
 				triangleBuildInput.triangleArray.vertexStrideInBytes = sizeof(Math::vec3<float>);
 				triangleBuildInput.triangleArray.numVertices = box.verticesRepeated.length;
-				triangleBuildInput.triangleArray.vertexBuffers = (CUdeviceptr*)& vertices.device;
+				triangleBuildInput.triangleArray.vertexBuffers = (CUdeviceptr*)&vertices.device;
 				triangleBuildInput.triangleArray.flags = triangle_input_flags;
 				triangleBuildInput.triangleArray.numSbtRecords = 1;
 				triangleBuildInput.triangleArray.sbtIndexOffsetBuffer = 0;
@@ -293,7 +278,7 @@ namespace CUDA
 					direct_callable_stack_size_from_traversal,
 					direct_callable_stack_size_from_state,
 					continuation_stack_size, 3);*/
-					// ray trace sbt binding
+				// ray trace sbt binding
 				cameraRayHitBuffer.resize(sizeof(CameraRayHitData)* paras.size.x* paras.size.y);
 
 				optixSbtRecordPackHeader(rt_rayAllocator, &rt_raygenData);
@@ -431,18 +416,18 @@ namespace CUDA
 
 				switch (axis)
 				{
-					case 0:
-						select<PhotonRecord*, 0>(startAddr, 0, end - start - 1, median - start);
-						photons[median]->axis = PPM_X;
-						break;
-					case 1:
-						select<PhotonRecord*, 1>(startAddr, 0, end - start - 1, median - start);
-						photons[median]->axis = PPM_Y;
-						break;
-					case 2:
-						select<PhotonRecord*, 2>(startAddr, 0, end - start - 1, median - start);
-						photons[median]->axis = PPM_Z;
-						break;
+				case 0:
+					select<PhotonRecord*, 0>(startAddr, 0, end - start - 1, median - start);
+					photons[median]->axis = PPM_X;
+					break;
+				case 1:
+					select<PhotonRecord*, 1>(startAddr, 0, end - start - 1, median - start);
+					photons[median]->axis = PPM_Y;
+					break;
+				case 2:
+					select<PhotonRecord*, 2>(startAddr, 0, end - start - 1, median - start);
+					photons[median]->axis = PPM_Z;
+					break;
 				}
 
 				// calculate the bounding box
@@ -451,18 +436,18 @@ namespace CUDA
 				float3 midPoint = (*photons[median]).position;
 				switch (axis)
 				{
-					case 0:
-						rightMin.x = midPoint.x;
-						leftMax.x = midPoint.x;
-						break;
-					case 1:
-						rightMin.y = midPoint.y;
-						leftMax.y = midPoint.y;
-						break;
-					case 2:
-						rightMin.z = midPoint.z;
-						leftMax.z = midPoint.z;
-						break;
+				case 0:
+					rightMin.x = midPoint.x;
+					leftMax.x = midPoint.x;
+					break;
+				case 1:
+					rightMin.y = midPoint.y;
+					leftMax.y = midPoint.y;
+					break;
+				case 2:
+					rightMin.z = midPoint.z;
+					leftMax.z = midPoint.z;
+					break;
 				}
 
 				// recursively build the KDTree
@@ -487,7 +472,7 @@ namespace CUDA
 				PhotonRecord* photonData = new PhotonRecord[photonBufferCnt];
 				cudaMemcpy(photonData, photonBuffer.map(), photonBufferSize, cudaMemcpyDeviceToHost);
 				int validPhotonCnt = 0;
-				PhotonRecord** tempPhotons = (PhotonRecord * *) new PhotonRecord * [photonBufferCnt];
+				PhotonRecord** tempPhotons = (PhotonRecord**) new PhotonRecord * [photonBufferCnt];
 				for (int c0(0); c0 < (int)photonBufferCnt; c0++)
 					if (photonData[c0].energy.x > 0.0f ||
 						photonData[c0].energy.y > 0.0f ||
@@ -583,9 +568,9 @@ namespace OpenGL
 		{
 			switch (_button)
 			{
-				case GLFW_MOUSE_BUTTON_LEFT:trans.mouse.refreshButton(0, _action); break;
-				case GLFW_MOUSE_BUTTON_MIDDLE:trans.mouse.refreshButton(1, _action); break;
-				case GLFW_MOUSE_BUTTON_RIGHT:trans.mouse.refreshButton(2, _action); break;
+			case GLFW_MOUSE_BUTTON_LEFT:trans.mouse.refreshButton(0, _action); break;
+			case GLFW_MOUSE_BUTTON_MIDDLE:trans.mouse.refreshButton(1, _action); break;
+			case GLFW_MOUSE_BUTTON_RIGHT:trans.mouse.refreshButton(2, _action); break;
 			}
 		}
 		virtual void mousePos(double _x, double _y)override
@@ -602,16 +587,16 @@ namespace OpenGL
 			{
 				switch (_key)
 				{
-					case GLFW_KEY_ESCAPE:if (_action == GLFW_PRESS)
-						glfwSetWindowShouldClose(_window, true); break;
-					case GLFW_KEY_A:trans.key.refresh(0, _action); break;
-					case GLFW_KEY_D:trans.key.refresh(1, _action); break;
-					case GLFW_KEY_W:trans.key.refresh(2, _action); break;
-					case GLFW_KEY_S:trans.key.refresh(3, _action); break;
-						/*	case GLFW_KEY_UP:monteCarlo.trans.persp.increaseV(0.02); break;
-							case GLFW_KEY_DOWN:monteCarlo.trans.persp.increaseV(-0.02); break;
-							case GLFW_KEY_RIGHT:monteCarlo.trans.persp.increaseD(0.01); break;
-							case GLFW_KEY_LEFT:monteCarlo.trans.persp.increaseD(-0.01); break;*/
+				case GLFW_KEY_ESCAPE:if (_action == GLFW_PRESS)
+					glfwSetWindowShouldClose(_window, true); break;
+				case GLFW_KEY_A:trans.key.refresh(0, _action); break;
+				case GLFW_KEY_D:trans.key.refresh(1, _action); break;
+				case GLFW_KEY_W:trans.key.refresh(2, _action); break;
+				case GLFW_KEY_S:trans.key.refresh(3, _action); break;
+					/*	case GLFW_KEY_UP:monteCarlo.trans.persp.increaseV(0.02); break;
+						case GLFW_KEY_DOWN:monteCarlo.trans.persp.increaseV(-0.02); break;
+						case GLFW_KEY_RIGHT:monteCarlo.trans.persp.increaseD(0.01); break;
+						case GLFW_KEY_LEFT:monteCarlo.trans.persp.increaseD(-0.01); break;*/
 				}
 			}
 		}
