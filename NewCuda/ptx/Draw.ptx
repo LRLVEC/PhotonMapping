@@ -1192,9 +1192,6 @@ BB4_7:
 	bfi.b64 	%rd3, %rd1, %rd2, 32, 32;
 	mov.u32 	%r3, 0;
 	st.u32 	[%rd3], %r3;
-	// inline asm
-	call _optix_terminate_ray, ();
-	// inline asm
 	ret;
 }
 

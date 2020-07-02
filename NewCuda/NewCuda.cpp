@@ -83,7 +83,7 @@ namespace CUDA
 			OptixProgramGroupOptions pt_programGroupOptions;
 			OptixProgramGroupOptions gather_programGroupOptions;
 			Program rt_rayAllocator;
-			Program rt_miss;
+			Program miss;
 			Program rt_closestHit;
 			Program pt_photonEmit;
 			Program pt_photonHit;
@@ -95,8 +95,8 @@ namespace CUDA
 			Pipeline rt_pip;	// ray tracing pipeline
 			Pipeline pt_pip;	// photon tracing pipeline
 			Pipeline gather_pip;	// gather pipeline
+			SbtRecord<int> missData;
 			SbtRecord<Rt_RayGenData> rt_raygenData;
-			SbtRecord<int> rt_missData;
 			SbtRecord<Rt_CloseHitData> rt_hitData;
 			SbtRecord<Pt_RayGenData> pt_raygenData;
 			SbtRecord<Pt_CloseHitData> pt_hitData;
@@ -104,8 +104,8 @@ namespace CUDA
 			SbtRecord<Gather_CloseHitData> gather_hitData;
 			LightSource lightSource;
 			Buffer lightSourceBuffer;
+			Buffer missDataBuffer;
 			Buffer rt_raygenDataBuffer;
-			Buffer rt_missDataBuffer;
 			Buffer rt_hitDataBuffer;
 			Buffer cameraRayHitBuffer;
 			Buffer pt_photonBuffer;
@@ -134,32 +134,32 @@ namespace CUDA
 			PathTracing(OpenGL::SourceManager* _sourceManager, OpenGL::OptiXDefautRenderer* dr, OpenGL::FrameScale const& _size, void* transInfoDevice)
 				:
 				context(),
-				rt_moduleCompileOptions{ OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,OPTIX_COMPILE_OPTIMIZATION_DEFAULT,OPTIX_COMPILE_DEBUG_LEVEL_NONE },
-				pt_moduleCompileOptions{ OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,OPTIX_COMPILE_OPTIMIZATION_DEFAULT,OPTIX_COMPILE_DEBUG_LEVEL_NONE },
-				gather_moduleCompileOptions{ OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,OPTIX_COMPILE_OPTIMIZATION_DEFAULT,OPTIX_COMPILE_DEBUG_LEVEL_NONE },
-				rt_pipelineCompileOptions{ false,OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,3,2,OPTIX_EXCEPTION_FLAG_NONE,"paras" },
-				pt_pipelineCompileOptions{ false,OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,3,2,OPTIX_EXCEPTION_FLAG_NONE,"paras" },
-				gather_pipelineCompileOptions{ false,OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,3,2,OPTIX_EXCEPTION_FLAG_NONE,"paras" },
+				rt_moduleCompileOptions{ OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,OPTIX_COMPILE_OPTIMIZATION_LEVEL_0,OPTIX_COMPILE_DEBUG_LEVEL_FULL },
+				pt_moduleCompileOptions{ OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,OPTIX_COMPILE_OPTIMIZATION_LEVEL_0,OPTIX_COMPILE_DEBUG_LEVEL_FULL },
+				gather_moduleCompileOptions{ OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,OPTIX_COMPILE_OPTIMIZATION_LEVEL_0,OPTIX_COMPILE_DEBUG_LEVEL_FULL },
+				rt_pipelineCompileOptions{ false,OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,3,2,OPTIX_EXCEPTION_FLAG_DEBUG,"paras" },
+				pt_pipelineCompileOptions{ false,OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,3,2,OPTIX_EXCEPTION_FLAG_DEBUG,"paras" },
+				gather_pipelineCompileOptions{ false,OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,3,2,OPTIX_EXCEPTION_FLAG_DEBUG,"paras" },
 				mm(&_sourceManager->folder, context, &rt_moduleCompileOptions, &rt_pipelineCompileOptions),
 				rt_programGroupOptions{},
 				pt_programGroupOptions{},
 				gather_programGroupOptions{},
 				rt_rayAllocator(Vector<String<char>>("__raygen__RayAllocator"), Program::RayGen, &rt_programGroupOptions, context, &mm),
-				rt_miss(Vector<String<char>>("__miss__Ahh"), Program::Miss, &rt_programGroupOptions, context, &mm),
+				miss(Vector<String<char>>("__miss__Ahh"), Program::Miss, &rt_programGroupOptions, context, &mm),
 				rt_closestHit(Vector<String<char>>("__closesthit__RayHit"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
 				pt_photonEmit(Vector<String<char>>("__raygen__PhotonEmit"), Program::RayGen, &pt_programGroupOptions, context, &mm),
 				pt_photonHit(Vector<String<char>>("__closesthit__PhotonHit"), Program::HitGroup, &pt_programGroupOptions, context, &mm),
 				gather_gather(Vector<String<char>>("__raygen__Gather"), Program::RayGen, &gather_programGroupOptions, context, &mm),
 				gather_shadowRayHit(Vector<String<char>>("__closesthit__ShadowRayHit"), Program::HitGroup, &gather_programGroupOptions, context, &mm),
-				rt_pipelineLinkOptions{ 2,OPTIX_COMPILE_DEBUG_LEVEL_NONE,false },
-				pt_pipelineLinkOptions{ 2,OPTIX_COMPILE_DEBUG_LEVEL_NONE,false },
-				gather_pipelineLinkOptions{ 2,OPTIX_COMPILE_DEBUG_LEVEL_NONE,false },
-				rt_pip(context, &rt_pipelineCompileOptions, &rt_pipelineLinkOptions, { rt_rayAllocator ,rt_closestHit, rt_miss }),
-				pt_pip(context, &pt_pipelineCompileOptions, &pt_pipelineLinkOptions, { pt_photonEmit ,pt_photonHit }),
-				gather_pip(context, &gather_pipelineCompileOptions, &gather_pipelineLinkOptions, { gather_gather, gather_shadowRayHit }),
+				rt_pipelineLinkOptions{ 2,OPTIX_COMPILE_DEBUG_LEVEL_FULL,false },
+				pt_pipelineLinkOptions{ 2,OPTIX_COMPILE_DEBUG_LEVEL_FULL,false },
+				gather_pipelineLinkOptions{ 2,OPTIX_COMPILE_DEBUG_LEVEL_FULL,false },
+				rt_pip(context, &rt_pipelineCompileOptions, &rt_pipelineLinkOptions, { rt_rayAllocator ,rt_closestHit, miss }),
+				pt_pip(context, &pt_pipelineCompileOptions, &pt_pipelineLinkOptions, { pt_photonEmit ,pt_photonHit ,miss }),
+				gather_pip(context, &gather_pipelineCompileOptions, &gather_pipelineLinkOptions, { gather_gather, gather_shadowRayHit,miss }),
+				missDataBuffer(missData, false),
 				lightSourceBuffer(lightSource, false),
 				rt_raygenDataBuffer(rt_raygenData, false),
-				rt_missDataBuffer(rt_missData, false),
 				rt_hitDataBuffer(rt_hitData, false),
 				cameraRayHitBuffer(Buffer::Device),
 				pt_photonBuffer(Buffer::Device),
@@ -278,16 +278,16 @@ namespace CUDA
 					direct_callable_stack_size_from_traversal,
 					direct_callable_stack_size_from_state,
 					continuation_stack_size, 3);*/
-				// ray trace sbt binding
-				cameraRayHitBuffer.resize(sizeof(CameraRayHitData)* paras.size.x* paras.size.y);
+					// ray trace sbt binding
+				cameraRayHitBuffer.resize(sizeof(CameraRayHitData)* _size.w* _size.h);
 
 				optixSbtRecordPackHeader(rt_rayAllocator, &rt_raygenData);
 				rt_raygenData.data.rayData = { 1.f, 1.f, 1.f };
 				rt_raygenData.data.cameraRayHitData = (CameraRayHitData*)cameraRayHitBuffer.device;
 				rt_raygenDataBuffer.copy(rt_raygenData);
 
-				optixSbtRecordPackHeader(rt_miss, &rt_missData);
-				rt_missDataBuffer.copy(rt_missData);
+				optixSbtRecordPackHeader(miss, &missData);
+				missDataBuffer.copy(missData);
 
 				optixSbtRecordPackHeader(rt_closestHit, &rt_hitData);
 				rt_hitData.data.normals = (float3*)normals.device;
@@ -297,7 +297,7 @@ namespace CUDA
 				rt_hitDataBuffer.copy(rt_hitData);
 
 				rt_sbt.raygenRecord = rt_raygenDataBuffer;
-				rt_sbt.missRecordBase = rt_missDataBuffer;
+				rt_sbt.missRecordBase = missDataBuffer;
 				rt_sbt.missRecordStrideInBytes = sizeof(SbtRecord<int>);
 				rt_sbt.missRecordCount = 1;
 				rt_sbt.hitgroupRecordBase = rt_hitDataBuffer;
@@ -327,12 +327,15 @@ namespace CUDA
 				pt_hitDataBuffer.copy(pt_hitData);
 
 				pt_sbt.raygenRecord = pt_raygenDataBuffer;
+				pt_sbt.missRecordBase = missDataBuffer;
+				pt_sbt.missRecordStrideInBytes = sizeof(SbtRecord<int>);
+				pt_sbt.missRecordCount = 1;
 				pt_sbt.hitgroupRecordBase = pt_hitDataBuffer;
 				pt_sbt.hitgroupRecordStrideInBytes = sizeof(SbtRecord<PhotonRecord>);
 				pt_sbt.hitgroupRecordCount = 1;
 
 				// gather stage sbt binding
-				optixSbtRecordPackHeader(gather_gather, &gather_raygenDataBuffer);
+				optixSbtRecordPackHeader(gather_gather, &gather_raygenData);
 				gather_raygenData.data.cameraRayHitData = (CameraRayHitData*)cameraRayHitBuffer.device;
 				gather_raygenData.data.photonMap = (PhotonRecord*)photonMap.device;
 				gather_raygenData.data.normals = (float3*)normals.device;
@@ -342,11 +345,14 @@ namespace CUDA
 				gather_raygenData.data.lightSource = (LightSource*)lightSourceBuffer.device;
 				gather_raygenDataBuffer.copy(gather_raygenData);
 
-				optixSbtRecordPackHeader(gather_shadowRayHit, &gather_hitDataBuffer);
+				optixSbtRecordPackHeader(gather_shadowRayHit, &gather_hitData);
 				gather_hitData.data.normals = (float3*)normals.device;
 				gather_hitDataBuffer.copy(gather_hitData);
 
 				gather_sbt.raygenRecord = gather_raygenDataBuffer;
+				gather_sbt.missRecordBase = missDataBuffer;
+				gather_sbt.missRecordStrideInBytes = sizeof(SbtRecord<int>);
+				gather_sbt.missRecordCount = 1;
 				gather_sbt.hitgroupRecordBase = gather_hitDataBuffer;
 				gather_sbt.hitgroupRecordStrideInBytes = sizeof(SbtRecord<Gather_CloseHitData>);
 				gather_sbt.hitgroupRecordCount = 1;

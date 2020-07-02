@@ -198,8 +198,8 @@ extern "C" __global__ void __closesthit__PhotonHit()
 }
 
 
-static __device__ __inline__
-void accumulatePhoton(const PhotonRecord& photon,
+static __device__ __inline__ void accumulatePhoton(
+	const PhotonRecord& photon,
 	const float3& hitPointNormal,
 	const float3& hitPointAttenKd,
 	int& numNewPhotons, float3& flux)
@@ -222,103 +222,103 @@ extern "C" __global__ void __raygen__Gather()
 	paras.image[index.y * paras.size.x + index.x] = make_float4(.0f, 1.f, .0f, 1.0f);
 	return;
 
-	Gather_RayGenData* gather_raygenData = (Gather_RayGenData*)optixGetSbtDataPointer();
-	const CameraRayHitData& cameraRayHitData = gather_raygenData->cameraRayHitData[index.y * paras.size.x + index.x];
-	PhotonRecord* photonMap = gather_raygenData->photonMap;
-
-	if (!cameraRayHitData.hit)
-	{
-		paras.image[index.y * paras.size.x + index.x] = make_float4(0.0f, 0.0f, 0.0f, 1.0f);
-		return;
-	}
-
-	// get the property of the hit point
-	float3 hitPointNormal = gather_raygenData->normals[cameraRayHitData.primIdx];
-	float3 hitPointAttenKd = gather_raygenData->attenKd[cameraRayHitData.primIdx];
-
-	float radius2 = 0.02;	// To do: dynamic adjust
-
-	int stack[MAX_DEPTH];
-	int stackPointer = 0;
-	int node = 0;
-
-#define push_node(N) stack[stackPointer++] = (N)
-#define pop_node(N) stack[--stackPointer]
-
-	int numNewPhotons = 0;
-	float3 flux = make_float3(0.0f, 0.0f, 0.0f);
-
-	push_node(0);
-	do
-	{
-		PhotonRecord& photon = photonMap[node];
-		if (!(photon.axis & PPM_NULL))
-		{
-			float3 diff = cameraRayHitData.position - photon.position;
-			float distance2 = dot(diff, diff);
-
-			if (distance2 <= radius2)
-				accumulatePhoton(photon, hitPointNormal, hitPointAttenKd, numNewPhotons, flux);
-
-			if (!(photon.axis & PPM_LEAF))
-			{
-				float d;
-				if (photon.axis & PPM_X)
-					d = diff.x;
-				else if (photon.axis & PPM_Y)
-					d = diff.y;
-				else
-					d = diff.z;
-
-				int selector = d < 0.0f ? 0 : 1;
-				if (d * d < radius2)
-					push_node(2 * node + 2 - selector);
-
-				node = 2 * node + 1 + selector;
-			}
-			else
-			{
-				node = pop_node();
-			}
-		}
-		else
-		{
-			node = pop_node();
-		}
-	} while (node);
-
-	// compute the indirect flux
-	float3 indirectFlux = 1.0f / (M_PIf * radius2) * flux / (paras.pt_size.x * paras.pt_size.y);
-
-	// compute the direct flux
-	float3 pointOnLight;
-	LightSource* lightSource = gather_raygenData->lightSource;
-	if (lightSource->type == LightSource::SPOT)
-	{
-		pointOnLight = lightSource->position;
-	}
-	/*else if (lightSource->type == LightSource::AREA)
-	{
-
-	}*/
-
-	float3 shadowRayDir = normalize(pointOnLight - cameraRayHitData.position);
-	float cosDN = dot(shadowRayDir, hitPointNormal);
-
-	float attenuation = 1.0f;
-	unsigned int pd0, pd1;
-	pP(&attenuation, pd0, pd1);
-	optixTrace(paras.handle, cameraRayHitData.position, shadowRayDir,
-		0.001f, 1e16f,
-		0.0f, OptixVisibilityMask(255), OPTIX_RAY_FLAG_NONE,
-		RayRadiance,        // SBT offset
-		RayCount,           // SBT stride
-		RayRadiance,        // missSBTIndex
-		pd0, pd1);
-
-	float3 directFlux = lightSource->power * attenuation * hitPointAttenKd;
-	float3 finalColor = indirectFlux + directFlux;
-	paras.image[index.y * paras.size.x + index.x] = make_float4(finalColor, 1.0f);
+//	Gather_RayGenData* gather_raygenData = (Gather_RayGenData*)optixGetSbtDataPointer();
+//	const CameraRayHitData& cameraRayHitData = gather_raygenData->cameraRayHitData[index.y * paras.size.x + index.x];
+//	PhotonRecord* photonMap = gather_raygenData->photonMap;
+//
+//	if (!cameraRayHitData.hit)
+//	{
+//		paras.image[index.y * paras.size.x + index.x] = make_float4(0.0f, 0.0f, 0.0f, 1.0f);
+//		return;
+//	}
+//
+//	// get the property of the hit point
+//	float3 hitPointNormal = gather_raygenData->normals[cameraRayHitData.primIdx];
+//	float3 hitPointAttenKd = gather_raygenData->attenKd[cameraRayHitData.primIdx];
+//
+//	float radius2 = 0.02;	// To do: dynamic adjust
+//
+//	int stack[MAX_DEPTH];
+//	int stackPointer = 0;
+//	int node = 0;
+//
+//#define push_node(N) stack[stackPointer++] = (N)
+//#define pop_node(N) stack[--stackPointer]
+//
+//	int numNewPhotons = 0;
+//	float3 flux = make_float3(0.0f, 0.0f, 0.0f);
+//
+//	push_node(0);
+//	do
+//	{
+//		PhotonRecord& photon = photonMap[node];
+//		if (!(photon.axis & PPM_NULL))
+//		{
+//			float3 diff = cameraRayHitData.position - photon.position;
+//			float distance2 = dot(diff, diff);
+//
+//			if (distance2 <= radius2)
+//				accumulatePhoton(photon, hitPointNormal, hitPointAttenKd, numNewPhotons, flux);
+//
+//			if (!(photon.axis & PPM_LEAF))
+//			{
+//				float d;
+//				if (photon.axis & PPM_X)
+//					d = diff.x;
+//				else if (photon.axis & PPM_Y)
+//					d = diff.y;
+//				else
+//					d = diff.z;
+//
+//				int selector = d < 0.0f ? 0 : 1;
+//				if (d * d < radius2)
+//					push_node(2 * node + 2 - selector);
+//
+//				node = 2 * node + 1 + selector;
+//			}
+//			else
+//			{
+//				node = pop_node();
+//			}
+//		}
+//		else
+//		{
+//			node = pop_node();
+//		}
+//	} while (node);
+//
+//	// compute the indirect flux
+//	float3 indirectFlux = 1.0f / (M_PIf * radius2) * flux / (paras.pt_size.x * paras.pt_size.y);
+//
+//	// compute the direct flux
+//	float3 pointOnLight;
+//	LightSource* lightSource = gather_raygenData->lightSource;
+//	if (lightSource->type == LightSource::SPOT)
+//	{
+//		pointOnLight = lightSource->position;
+//	}
+//	/*else if (lightSource->type == LightSource::AREA)
+//	{
+//
+//	}*/
+//
+//	float3 shadowRayDir = normalize(pointOnLight - cameraRayHitData.position);
+//	float cosDN = dot(shadowRayDir, hitPointNormal);
+//
+//	float attenuation = 1.0f;
+//	unsigned int pd0, pd1;
+//	pP(&attenuation, pd0, pd1);
+//	optixTrace(paras.handle, cameraRayHitData.position, shadowRayDir,
+//		0.001f, 1e16f,
+//		0.0f, OptixVisibilityMask(255), OPTIX_RAY_FLAG_NONE,
+//		RayRadiance,        // SBT offset
+//		RayCount,           // SBT stride
+//		RayRadiance,        // missSBTIndex
+//		pd0, pd1);
+//
+//	float3 directFlux = lightSource->power * attenuation * hitPointAttenKd;
+//	float3 finalColor = indirectFlux + directFlux;
+//	paras.image[index.y * paras.size.x + index.x] = make_float4(finalColor, 1.0f);
 }
 extern "C" __global__ void __closesthit__ShadowRayHit()
 {
@@ -326,5 +326,5 @@ extern "C" __global__ void __closesthit__ShadowRayHit()
 	pd0 = optixGetPayload_0();
 	pd1 = optixGetPayload_1();
 	*(float*)uP(pd0, pd1) = 0.0f;	// invisiable
-	optixTerminateRay();
+	//optixTerminateRay();
 }
