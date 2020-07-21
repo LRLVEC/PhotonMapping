@@ -5,6 +5,8 @@ VisualStudioVersion = 16.0.29209.62
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NewCuda", "NewCuda\NewCuda.vcxproj", "{00FFFE66-07B8-4816-82D1-9EACFC60F9BE}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "OptiX710", "OptiX710\OptiX710.vcxproj", "{C946FB1B-D1B8-4404-A6DE-310970CB9D46}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -15,6 +17,10 @@ Global
 		{00FFFE66-07B8-4816-82D1-9EACFC60F9BE}.Debug|x64.Build.0 = Debug|x64
 		{00FFFE66-07B8-4816-82D1-9EACFC60F9BE}.Release|x64.ActiveCfg = Release|x64
 		{00FFFE66-07B8-4816-82D1-9EACFC60F9BE}.Release|x64.Build.0 = Release|x64
+		{C946FB1B-D1B8-4404-A6DE-310970CB9D46}.Debug|x64.ActiveCfg = Debug|x64
+		{C946FB1B-D1B8-4404-A6DE-310970CB9D46}.Debug|x64.Build.0 = Debug|x64
+		{C946FB1B-D1B8-4404-A6DE-310970CB9D46}.Release|x64.ActiveCfg = Release|x64
+		{C946FB1B-D1B8-4404-A6DE-310970CB9D46}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

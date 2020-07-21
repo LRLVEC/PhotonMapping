@@ -13,7 +13,7 @@ extern "C" __global__ void __raygen__RayAllocator()
 {
 	uint2 index = make_uint2(optixGetLaunchIndex());
 	RayData* rtData = (RayData*)optixGetSbtDataPointer();
-	float3 color = make_float3(0);
+	float3 color = make_float3(0.f, 0.f, 0.f);
 
 	float2 ahh = random(index, paras.size, 0) +
 		make_float2(index) - make_float2(paras.size) / 2.0f;

@@ -51,7 +51,7 @@ namespace CUDA
 				OPTIX_COMPILE_OPTIMIZATION_LEVEL_0,
 				OPTIX_COMPILE_DEBUG_LEVEL_FULL },
 				pipelineCompileOptions{ false,
-				OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+				OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
 				3,2,OPTIX_EXCEPTION_FLAG_NONE,"paras" },
 				mm(&_sourceManager->folder, context, &moduleCompileOptions, &pipelineCompileOptions),
 				programGroupOptions{},
@@ -290,7 +290,7 @@ int main()
 	Window::WindowManager wm(winPara);
 	OpenGL::PathTracing pathTracer(winPara.size.size);
 	wm.init(0, &pathTracer);
-	glfwSwapInterval(1);
+	glfwSwapInterval(0);
 	FPS fps;
 	fps.refresh();
 	while (!wm.close())
