@@ -1,6 +1,0 @@
-Program:	Draw
-{
-	__raygen__RayAllocator
-	__closesthit__Ahh
-	__miss__Ahh
-}
