@@ -13,7 +13,7 @@ extern "C" __global__ void __raygen__RayAllocator()
 {
 	uint2 index = make_uint2(optixGetLaunchIndex());
 	RayData* rtData = (RayData*)optixGetSbtDataPointer();
-	float3 color = make_float3(0);
+	float3 color = make_float3(0.f, 0.f, 0.f);
 
 	float2 ahh = random(index, paras.size, 0) +
 		make_float2(index) - make_float2(paras.size) / 2.0f;
@@ -22,11 +22,11 @@ extern "C" __global__ void __raygen__RayAllocator()
 		dot(paras.trans->row0, d),
 		dot(paras.trans->row1, d),
 		dot(paras.trans->row2, d)));
-	unsigned int pd0, pd1; 
+	unsigned int pd0, pd1;
 	pP(&color, pd0, pd1);
 	optixTrace(paras.handle, paras.trans->r0, dd,
 		0.001f, 1e16f,
-		0.0f, OptixVisibilityMask(1), OPTIX_RAY_FLAG_NONE,
+		0.0f, OptixVisibilityMask(255), OPTIX_RAY_FLAG_NONE,
 		RayRadiance,        // SBT offset
 		RayCount,           // SBT stride
 		RayRadiance,        // missSBTIndex

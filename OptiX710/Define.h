@@ -1,8 +1,16 @@
 #pragma once
 #ifdef DefineDevice
 #include <OptiX/_Define_7_Device.h>
+struct TransInfo
+{
+	float4 row0;
+	float4 row1;
+	float4 row2;
+	float3 r0;
+	float z0;
+};
 #else
-using TransInfo = OpenGL::OptiX::Trans::TransInfo;
+using TransInfo = CUDA::OptiX::Trans::TransInfo;
 #endif
 enum RayType
 {

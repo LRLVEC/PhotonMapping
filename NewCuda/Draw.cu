@@ -12,7 +12,6 @@ extern "C"
 extern "C" __global__ void __raygen__RayAllocator()
 {
 	uint2 index = make_uint2(optixGetLaunchIndex());
-
 	Rt_RayGenData* rt_raygenData = (Rt_RayGenData*)optixGetSbtDataPointer();
 	CameraRayHitData& cameraRayHitData = rt_raygenData->cameraRayHitData[index.y * paras.size.x + index.x];
 

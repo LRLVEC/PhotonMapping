@@ -9,7 +9,7 @@
 #include <_Time.h>
 #include <_STL.h>
 
-namespace OpenGL
+namespace CUDA
 {
 	namespace OptiX
 	{
@@ -28,42 +28,43 @@ namespace OpenGL
 			SbtRecord<RayData> raygenData;
 			SbtRecord<int> missData;
 			SbtRecord<CloseHitData> hitData;
-			CUDA::Buffer raygenDataBuffer;
-			CUDA::Buffer missDataBuffer;
-			CUDA::Buffer hitDataBuffer;
+			Buffer raygenDataBuffer;
+			Buffer missDataBuffer;
+			Buffer hitDataBuffer;
 			OptixShaderBindingTable sbt;
-			CUDA::Buffer frameBuffer;
+			Buffer frameBuffer;
 			CUstream cuStream;
 			Parameters paras;
-			CUDA::Buffer parasBuffer;
+			Buffer parasBuffer;
 			STL box;
-			CUDA::Buffer vertices;
-			CUDA::Buffer normals;
+			Buffer vertices;
+			Buffer normals;
 			OptixBuildInput triangleBuildInput;
 			OptixAccelBuildOptions accelOptions;
-			CUDA::Buffer GASOutput;
+			Buffer GASOutput;
 			OptixTraversableHandle GASHandle;
-			PathTracing(SourceManager* _sourceManager, DefautRenderer* dr, FrameScale const& _size, void* transInfoDevice)
+			unsigned int errorCounter;
+			PathTracing(OpenGL::SourceManager* _sourceManager, OpenGL::OptiXDefautRenderer* dr, OpenGL::FrameScale const& _size, void* transInfoDevice)
 				:
 				context(),
 				moduleCompileOptions{
 				OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
 				OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
-				OPTIX_COMPILE_DEBUG_LEVEL_NONE },
+				OPTIX_COMPILE_DEBUG_LEVEL_FULL },
 				pipelineCompileOptions{ false,
-				OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-				3,2,OPTIX_EXCEPTION_FLAG_NONE,"paras" },
+				OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
+				2,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },//OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE: new in OptiX7.1.0
 				mm(&_sourceManager->folder, context, &moduleCompileOptions, &pipelineCompileOptions),
 				programGroupOptions{},
 				rayAllocator(Vector<String<char>>("__raygen__RayAllocator"), Program::RayGen, &programGroupOptions, context, &mm),
 				miss(Vector<String<char>>("__miss__Ahh"), Program::Miss, &programGroupOptions, context, &mm),
 				closestHit(Vector<String<char>>("__closesthit__Ahh"), Program::HitGroup, &programGroupOptions, context, &mm),
-				pipelineLinkOptions{ 2,OPTIX_COMPILE_DEBUG_LEVEL_NONE,false },
-				pip(context, &pipelineCompileOptions, &pipelineLinkOptions, { rayAllocator ,closestHit,miss }),
+				pipelineLinkOptions{ 1,OPTIX_COMPILE_DEBUG_LEVEL_FULL },//no overrideUsesMotionBlur in OptiX7.1.0
+				pip(context, &pipelineCompileOptions, &pipelineLinkOptions, { rayAllocator ,closestHit, miss }),
 				raygenDataBuffer(raygenData, false),
 				missDataBuffer(missData, false),
 				hitDataBuffer(hitData, false),
-				sbt(),
+				sbt{},
 				frameBuffer(*dr),
 				parasBuffer(paras, false),
 				box(_sourceManager->folder.find("resources/Stanford_bunny_3.stl").readSTL()),
@@ -75,29 +76,32 @@ namespace OpenGL
 			{
 				box.getVerticesRepeated();
 				box.getNormals();
+				box.printInfo(false);
 				vertices.copy(box.verticesRepeated.data, sizeof(Math::vec3<float>)* box.verticesRepeated.length);
 				normals.copy(box.normals.data, sizeof(Math::vec3<float>)* box.normals.length);
 				uint32_t triangle_input_flags[1] =  // One per SBT record for this build input
 				{
 					OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT
+					//OPTIX_GEOMETRY_FLAG_NONE
 				};
 
 				triangleBuildInput.type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
 				triangleBuildInput.triangleArray.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
-				triangleBuildInput.triangleArray.vertexStrideInBytes = sizeof(Math::vec3<float>);
+				//triangleBuildInput.triangleArray.vertexStrideInBytes = sizeof(Math::vec3<float>);
 				triangleBuildInput.triangleArray.numVertices = box.verticesRepeated.length;
-				triangleBuildInput.triangleArray.vertexBuffers = (CUdeviceptr*)& vertices.device;
+				triangleBuildInput.triangleArray.vertexBuffers = (CUdeviceptr*)&vertices.device;
 				triangleBuildInput.triangleArray.flags = triangle_input_flags;
 				triangleBuildInput.triangleArray.numSbtRecords = 1;
 				triangleBuildInput.triangleArray.sbtIndexOffsetBuffer = 0;
 				triangleBuildInput.triangleArray.sbtIndexOffsetSizeInBytes = 0;
 				triangleBuildInput.triangleArray.sbtIndexOffsetStrideInBytes = 0;
+				triangleBuildInput.triangleArray.transformFormat = OPTIX_TRANSFORM_FORMAT_NONE;//new in OptiX7.1.0
 
 				accelOptions.buildFlags = OPTIX_BUILD_FLAG_ALLOW_COMPACTION;
 				accelOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
 
-				CUDA::Buffer temp(CUDA::Buffer::Device);
-				CUDA::Buffer compation(CUDA::Buffer::Device);
+				Buffer temp(Buffer::Device);
+				Buffer compation(Buffer::Device);
 				OptixAccelBufferSizes GASBufferSizes;
 				optixAccelComputeMemoryUsage(context, &accelOptions, &triangleBuildInput, 1, &GASBufferSizes);
 				temp.resize(GASBufferSizes.tempSizeInBytes);
@@ -109,7 +113,7 @@ namespace OpenGL
 				emitProperty.result = (CUdeviceptr)((char*)compation.device + compactedSizeOffset);
 
 				optixAccelBuild(context, 0,
-					&accelOptions, &triangleBuildInput, 1,// num build inputs
+					&accelOptions, &triangleBuildInput, 1,// num build inputs, which is the num of vertexBuffers pointers
 					temp, GASBufferSizes.tempSizeInBytes,
 					compation, GASBufferSizes.outputSizeInBytes,
 					&GASHandle, &emitProperty, 1);
@@ -123,10 +127,7 @@ namespace OpenGL
 					// use handle as input and output
 					optixAccelCompact(context, 0, GASHandle, GASOutput, compacted_gas_size, &GASHandle);
 				}
-				else
-				{
-					GASOutput.copy(compation);
-				}
+				else GASOutput.copy(compation);
 				paras.handle = GASHandle;
 				paras.trans = (TransInfo*)transInfoDevice;
 				/*OptixStackSizes stackSizes = { 0 };
@@ -173,8 +174,12 @@ namespace OpenGL
 				optixLaunch(pip, cuStream, parasBuffer, sizeof(Parameters), &sbt, paras.size.x, paras.size.y, 1);
 				frameBuffer.unmap();
 			}
-			virtual void resize(FrameScale const& _size, GLuint _gl)
+			virtual void resize(OpenGL::FrameScale const& _size, GLuint _gl)
 			{
+				::printf("%u\n", ++errorCounter);
+				//maybe I can avoid adjusting this frequently...
+				//which means after changing the frame size, don't adjust this at once
+				//but wait for one more frame to check if the changing is finished yet...
 				frameBuffer.resize(_gl);
 				frameBuffer.map();
 				paras.image = (float4*)frameBuffer.device;
@@ -184,19 +189,22 @@ namespace OpenGL
 			}
 		};
 	}
+}
+namespace OpenGL
+{
 	struct PathTracing :OpenGL
 	{
 		SourceManager sm;
-		DefautRenderer renderer;
+		OptiXDefautRenderer renderer;
 		//CUDA::Buffer test;
-		OptiX::Trans trans;
-		OptiX::PathTracing pathTracer;
+		CUDA::OptiX::Trans trans;
+		CUDA::OptiX::PathTracing pathTracer;
 		PathTracing(FrameScale const& _size)
 			:
 			sm(),
 			renderer(&sm, _size),
 			//test(CUDA::Buffer::Device, 4),
-			trans({ {60},{0.01,0.9,0.005},{0.06},{0,0,0},1400.0 }),
+			trans({ {60},{0.01,0.9,0.005},{0.006},{0,0,0},1400.0 }),
 			pathTracer(&sm, &renderer, _size, trans.buffer.device)
 		{
 			/*test.resizeHost();
@@ -232,6 +240,7 @@ namespace OpenGL
 		{
 			renderer.resize({ _w,_h });
 			trans.resize({ _w,_h });
+			glFinish();
 			pathTracer.resize({ _w,_h }, renderer);
 		}
 		virtual void framePos(int, int) override {}
@@ -240,9 +249,9 @@ namespace OpenGL
 		{
 			switch (_button)
 			{
-				case GLFW_MOUSE_BUTTON_LEFT:trans.mouse.refreshButton(0, _action); break;
-				case GLFW_MOUSE_BUTTON_MIDDLE:trans.mouse.refreshButton(1, _action); break;
-				case GLFW_MOUSE_BUTTON_RIGHT:trans.mouse.refreshButton(2, _action); break;
+			case GLFW_MOUSE_BUTTON_LEFT:trans.mouse.refreshButton(0, _action); break;
+			case GLFW_MOUSE_BUTTON_MIDDLE:trans.mouse.refreshButton(1, _action); break;
+			case GLFW_MOUSE_BUTTON_RIGHT:trans.mouse.refreshButton(2, _action); break;
 			}
 		}
 		virtual void mousePos(double _x, double _y)override
@@ -259,16 +268,16 @@ namespace OpenGL
 			{
 				switch (_key)
 				{
-					case GLFW_KEY_ESCAPE:if (_action == GLFW_PRESS)
-						glfwSetWindowShouldClose(_window, true); break;
-					case GLFW_KEY_A:trans.key.refresh(0, _action); break;
-					case GLFW_KEY_D:trans.key.refresh(1, _action); break;
-					case GLFW_KEY_W:trans.key.refresh(2, _action); break;
-					case GLFW_KEY_S:trans.key.refresh(3, _action); break;
-						/*	case GLFW_KEY_UP:monteCarlo.trans.persp.increaseV(0.02); break;
-							case GLFW_KEY_DOWN:monteCarlo.trans.persp.increaseV(-0.02); break;
-							case GLFW_KEY_RIGHT:monteCarlo.trans.persp.increaseD(0.01); break;
-							case GLFW_KEY_LEFT:monteCarlo.trans.persp.increaseD(-0.01); break;*/
+				case GLFW_KEY_ESCAPE:if (_action == GLFW_PRESS)
+					glfwSetWindowShouldClose(_window, true); break;
+				case GLFW_KEY_A:trans.key.refresh(0, _action); break;
+				case GLFW_KEY_D:trans.key.refresh(1, _action); break;
+				case GLFW_KEY_W:trans.key.refresh(2, _action); break;
+				case GLFW_KEY_S:trans.key.refresh(3, _action); break;
+					/*	case GLFW_KEY_UP:monteCarlo.trans.persp.increaseV(0.02); break;
+						case GLFW_KEY_DOWN:monteCarlo.trans.persp.increaseV(-0.02); break;
+						case GLFW_KEY_RIGHT:monteCarlo.trans.persp.increaseD(0.01); break;
+						case GLFW_KEY_LEFT:monteCarlo.trans.persp.increaseD(-0.01); break;*/
 				}
 			}
 		}
