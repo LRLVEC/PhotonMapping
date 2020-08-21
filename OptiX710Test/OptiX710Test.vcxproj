@@ -14,13 +14,13 @@
     <CudaCompile Include="Draw.cu" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="OptiX710.cpp" />
-  </ItemGroup>
-  <ItemGroup>
     <ClInclude Include="Define.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="OptiX710Test.cpp" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{C946FB1B-D1B8-4404-A6DE-310970CB9D46}</ProjectGuid>
+    <ProjectGuid>{1C799526-9BF7-4965-88AB-0DE9E0D711CF}</ProjectGuid>
     <RootNamespace>OptiX710</RootNamespace>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
