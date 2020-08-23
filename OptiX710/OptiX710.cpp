@@ -67,14 +67,12 @@ namespace CUDA
 				sbt{},
 				frameBuffer(*dr),
 				parasBuffer(paras, false),
-				box(_sourceManager->folder.find("resources/teapot.stl").readSTL()),
-				vertices(Buffer::Device),
-				normals(Buffer::Device),
-				triangleBuildInput{},
-				accelOptions{},
-				GASOutput(Buffer::Device),
-				GASHandle(0),
-				errorCounter(0)
+				box(_sourceManager->folder.find("resources/Stanford_bunny_3.stl").readSTL()),
+				vertices(CUDA::Buffer::Device),
+				normals(CUDA::Buffer::Device),
+				triangleBuildInput({}),
+				accelOptions({}),
+				GASOutput(CUDA::Buffer::Device)
 			{
 				box.getVerticesRepeated();
 				box.getNormals();
@@ -300,7 +298,7 @@ int main()
 	Window::WindowManager wm(winPara);
 	OpenGL::PathTracing pathTracer(winPara.size.size);
 	wm.init(0, &pathTracer);
-	glfwSwapInterval(1);
+	glfwSwapInterval(0);
 	FPS fps;
 	fps.refresh();
 	while (!wm.close())
