@@ -63,7 +63,7 @@ namespace CUDA
 				raygenDataBuffer(raygenData, false),
 				missDataBuffer(missData, false),
 				hitDataBuffer(hitData, false),
-				sbt{},
+				sbt({}),
 				frameBuffer(*dr),
 				parasBuffer(paras, false),
 				box(_sourceManager->folder.find("resources/Stanford_bunny_3.stl").readSTL()),
@@ -196,8 +196,10 @@ namespace OpenGL
 		OptiXDefautRenderer renderer;
 		CUDA::OptiX::Trans trans;
 		CUDA::OptiX::PathTracing pathTracer;
+		//
 		FrameScale size;
 		bool frameSizeChanged;
+		//
 		PathTracing(FrameScale const& _size)
 			:
 			sm(),
@@ -228,6 +230,7 @@ namespace OpenGL
 		void terminate()
 		{
 		}
+		//
 		void changeFrameSize()
 		{
 			if (frameSizeChanged)
@@ -248,6 +251,7 @@ namespace OpenGL
 				size.h = _h;
 			}
 		}
+		//
 		virtual void framePos(int, int) override {}
 		virtual void frameFocus(int) override {}
 		virtual void mouseButton(int _button, int _action, int _mods)override
