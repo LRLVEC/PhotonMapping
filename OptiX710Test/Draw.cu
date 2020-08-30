@@ -222,6 +222,7 @@ struct HeapPhoton
 	float distance2;
 	float3 flux;
 	float3 kd;
+	float3 dir;
 };
 
 struct PhotonMaxHeap
@@ -229,6 +230,8 @@ struct PhotonMaxHeap
 #define PHOTONHEAP_SIZE 31
 	int currentSize;
 	HeapPhoton photons[PHOTONHEAP_SIZE];
+	float3 cameraRayDir;
+	float3 hitPointNormal;
 
 #define PARENT(x) ((x - 1) >> 1)
 	__device__ __inline__ void siftUp(int position)
@@ -263,13 +266,14 @@ struct PhotonMaxHeap
 		photons[i] = temp;
 	}
 
-	__device__ __inline__ void push(const float& distance2, const float3& flux, const float3& kd)
+	__device__ __inline__ void push(const float& distance2, const float3& flux, const float3& kd, const float3& dir)
 	{
 		if (currentSize < PHOTONHEAP_SIZE)
 		{
 			photons[currentSize].distance2 = distance2;
 			photons[currentSize].flux = flux;
 			photons[currentSize].kd = kd;
+			photons[currentSize].dir = dir;
 			siftUp(currentSize);
 			currentSize++;
 			return;
@@ -279,17 +283,34 @@ struct PhotonMaxHeap
 			photons[0].distance2 = distance2;
 			photons[0].flux = flux;
 			photons[0].kd = kd;
+			photons[0].dir = dir;
 			siftDown(0);
 		}
 	}
 
+#define filter_k 1
+
 	__device__ __inline__ float3 accumulate(float& radius2)
 	{
 		float3 flux = make_float3(0.0f, 0.0f, 0.0f);
-		for (int c0(0); c0 < currentSize; c0++)
-			flux += photons[c0].flux * photons[c0].kd;
+		float Wpc = 0.0f;	// weight of cone filter
+		// from which side came the camera ray
+		float sideFlag = dot(cameraRayDir, hitPointNormal);
+
 		if (currentSize > 0)
 			radius2 = photons[0].distance2;
+		float radius = sqrtf(radius2);
+
+		for (int c0(0); c0 < currentSize; c0++)
+		{
+			if (dot(photons[c0].dir, hitPointNormal) * sideFlag <= 0)
+				continue;
+			Wpc = 1.0f - sqrtf(photons[c0].distance2) / (filter_k * radius);
+			flux += photons[c0].flux * photons[c0].kd * Wpc;
+		}
+		
+		flux = flux / (M_PIf * radius2) / (1 - 2 / 3 / filter_k) / (paras.pt_size.x * paras.pt_size.y);
+
 		return flux;
 	}
 };
@@ -327,6 +348,8 @@ extern "C" __global__ void __raygen__Gather()
 
 	PhotonMaxHeap heap;
 	heap.currentSize = 0;
+	heap.cameraRayDir = cameraRayHitData.rayDir;
+	heap.hitPointNormal = hitPointNormal;
 
 	push_node(0);
 	do
@@ -338,7 +361,7 @@ extern "C" __global__ void __raygen__Gather()
 			float distance2 = dot(diff, diff);
 
 			if (distance2 <= radius2)
-				heap.push(distance2, photon.energy, hitPointKd);
+				heap.push(distance2, photon.energy, hitPointKd, photon.dir);
 
 			if (!(photon.axis & PPM_LEAF))
 			{
@@ -364,8 +387,7 @@ extern "C" __global__ void __raygen__Gather()
 	} while (node);
 
 	// indirect flux
-	float3 flux = heap.accumulate(radius2);
-	float3 indirectFlux = 1.0f / (M_PIf * radius2) * flux / (paras.pt_size.x * paras.pt_size.y);
+	float3 indirectFlux = heap.accumulate(radius2);
 
 	// direct flux
 	float3 lightSourcePosition;
@@ -401,8 +423,8 @@ extern "C" __global__ void __raygen__Gather()
 	float3 directFlux = lightSource->power * attenuation * hitPointKd * cosDN;
 
 	//float3 color = directFlux;
-	//float3 color = indirectFlux;
-	float3 color = directFlux + indirectFlux;
+	float3 color = indirectFlux;
+	//float3 color = directFlux + indirectFlux;
 
 	paras.image[index.y * paras.size.x + index.x] = make_float4(color, 1.0f);
 }

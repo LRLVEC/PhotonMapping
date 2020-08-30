@@ -11,6 +11,12 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <CudaCompile Include="CudaAcc.cu">
+      <CompileOut Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(IntDir)%(Filename)%(Extension).obj</CompileOut>
+      <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">compile</NvccCompilation>
+      <CompileOut Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(IntDir)%(Filename)%(Extension).obj</CompileOut>
+      <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Release|x64'">compile</NvccCompilation>
+    </CudaCompile>
     <CudaCompile Include="Draw.cu" />
   </ItemGroup>
   <ItemGroup>

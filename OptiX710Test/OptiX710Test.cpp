@@ -286,7 +286,7 @@ namespace CUDA
 				paras.trans = (TransInfo*)transInfoDevice;
 				paras.maxPhotonCnt = 8;
 				paras.maxDepth = 8;
-				paras.pt_size = make_uint2(400, 400);
+				paras.pt_size = make_uint2(100, 100);
 				/*OptixStackSizes stackSizes = { 0 };
 				optixUtilAccumulateStackSizes(programGroups[0], &stackSizes);
 
