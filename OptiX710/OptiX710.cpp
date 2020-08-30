@@ -43,7 +43,6 @@ namespace CUDA
 			OptixAccelBuildOptions accelOptions;
 			Buffer GASOutput;
 			OptixTraversableHandle GASHandle;
-			unsigned int errorCounter;
 			PathTracing(OpenGL::SourceManager* _sourceManager, OpenGL::OptiXDefautRenderer* dr, OpenGL::FrameScale const& _size, void* transInfoDevice)
 				:
 				context(),
@@ -171,15 +170,14 @@ namespace CUDA
 			virtual void run()
 			{
 				frameBuffer.map();
+				cudaDeviceSynchronize();
 				optixLaunch(pip, cuStream, parasBuffer, sizeof(Parameters), &sbt, paras.size.x, paras.size.y, 1);
+				cudaDeviceSynchronize();
 				frameBuffer.unmap();
+				cudaDeviceSynchronize();
 			}
 			virtual void resize(OpenGL::FrameScale const& _size, GLuint _gl)
 			{
-				::printf("%u\n", ++errorCounter);
-				//maybe I can avoid adjusting this frequently...
-				//which means after changing the frame size, don't adjust this at once
-				//but wait for one more frame to check if the changing is finished yet...
 				frameBuffer.resize(_gl);
 				frameBuffer.map();
 				paras.image = (float4*)frameBuffer.device;
@@ -196,23 +194,19 @@ namespace OpenGL
 	{
 		SourceManager sm;
 		OptiXDefautRenderer renderer;
-		//CUDA::Buffer test;
 		CUDA::OptiX::Trans trans;
 		CUDA::OptiX::PathTracing pathTracer;
+		FrameScale size;
+		bool frameSizeChanged;
 		PathTracing(FrameScale const& _size)
 			:
 			sm(),
 			renderer(&sm, _size),
-			//test(CUDA::Buffer::Device, 4),
 			trans({ {60},{0.01,0.9,0.005},{0.006},{0,0,0},1400.0 }),
-			pathTracer(&sm, &renderer, _size, trans.buffer.device)
+			pathTracer(&sm, &renderer, _size, trans.buffer.device),
+			size(_size),
+			frameSizeChanged(false)
 		{
-			/*test.resizeHost();
-			*(float*)test.host = 1234.5;
-			test.moveToDevice();
-			test.freeHost();
-			test.moveToHost();
-			::printf("---%f\n", *(float*)test.host);*/
 			trans.init(_size);
 		}
 		virtual void init(FrameScale const& _size) override
@@ -223,11 +217,9 @@ namespace OpenGL
 		}
 		virtual void run() override
 		{
+			changeFrameSize();
 			trans.operate();
-			if (trans.updated)
-			{
-				trans.updated = false;
-			}
+			trans.updated = false;
 			pathTracer.run();
 			renderer.updated = true;
 			renderer.use();
@@ -236,12 +228,25 @@ namespace OpenGL
 		void terminate()
 		{
 		}
+		void changeFrameSize()
+		{
+			if (frameSizeChanged)
+			{
+				renderer.resize(size);
+				trans.resize(size);
+				glFinish();
+				pathTracer.resize(size, renderer);
+				frameSizeChanged = false;
+			}
+		}
 		virtual void frameSize(int _w, int _h)override
 		{
-			renderer.resize({ _w,_h });
-			trans.resize({ _w,_h });
-			glFinish();
-			pathTracer.resize({ _w,_h }, renderer);
+			if (size.w != _w || size.h != _h)
+			{
+				frameSizeChanged = true;
+				size.w = _w;
+				size.h = _h;
+			}
 		}
 		virtual void framePos(int, int) override {}
 		virtual void frameFocus(int) override {}
