@@ -11,7 +11,12 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="Draw.cu" />
+    <CudaCompile Include="Draw.cu">
+      <CompileOut Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ptx\%(Filename).ptx</CompileOut>
+      <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ptx</NvccCompilation>
+      <CompileOut Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ptx\%(Filename).ptx</CompileOut>
+      <NvccCompilation Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ptx</NvccCompilation>
+    </CudaCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="OptiX710.cpp" />
@@ -68,8 +73,7 @@
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <CompileOut>ptx\%(Filename).ptx</CompileOut>
-      <NvccCompilation>ptx</NvccCompilation>
+      <NvccCompilation>compile</NvccCompilation>
       <CodeGeneration>compute_75,sm_75</CodeGeneration>
       <GPUDebugInfo>false</GPUDebugInfo>
     </CudaCompile>
@@ -91,8 +95,7 @@
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <CompileOut>ptx\%(Filename).ptx</CompileOut>
-      <NvccCompilation>ptx</NvccCompilation>
+      <NvccCompilation>compile</NvccCompilation>
       <CodeGeneration>compute_75,sm_75</CodeGeneration>
     </CudaCompile>
   </ItemDefinitionGroup>

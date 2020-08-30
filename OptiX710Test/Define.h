@@ -38,7 +38,7 @@ struct CameraRayHitData
 {
 	float3 position;	// position of the hit point
 	float3 rayDir;		// direction of the camera ray
-	int primIdx;		// index of the hitten primitive, -1 if miss
+	int primIdx;		// index of the hit primitive, -1 if miss
 };
 
 struct Photon
