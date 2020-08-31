@@ -9,6 +9,8 @@
 #include <_Time.h>
 #include <_STL.h>
 
+void initRandom(curandState* state, int seed, unsigned int block, unsigned int grid, unsigned int MaxNum);
+
 #define ElemIndex(rec, index) ( (&(rec->position.x))[index] )
 
 template<class Elem> __inline void swap(Elem* list, int index1, int index2)
@@ -122,10 +124,6 @@ namespace CUDA
 			Buffer vertices;
 			Buffer normals;
 			Buffer kds;
-			Buffer pt_emitPositionSeeds;
-			Buffer pt_emitDirectionSeeds;
-			Buffer pt_hitDirectionSeeds;
-			Buffer RRSeeds;
 			OptixBuildInput triangleBuildInput;
 			OptixAccelBuildOptions accelOptions;
 			Buffer GASOutput;
@@ -148,13 +146,13 @@ namespace CUDA
 					OPTIX_COMPILE_DEBUG_LEVEL_FULL },
 				rt_pipelineCompileOptions{ false,
 					OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
-					4,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },//OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE: new in OptiX7.1.0
+					8,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },//OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE: new in OptiX7.1.0
 				pt_pipelineCompileOptions{ false,
 					OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
-					4,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },
+					8,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },
 				gt_pipelineCompileOptions{ false,
 					OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
-					4,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },
+					8,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },
 				mm(&_sourceManager->folder, context, &rt_moduleCompileOptions, &rt_pipelineCompileOptions),
 				rt_programGroupOptions{},
 				pt_programGroupOptions{},
@@ -192,10 +190,6 @@ namespace CUDA
 				vertices(Buffer::Device),
 				normals(Buffer::Device),
 				kds(Buffer::Device),
-				pt_emitPositionSeeds(Buffer::Device),
-				pt_emitDirectionSeeds(Buffer::Device),
-				pt_hitDirectionSeeds(Buffer::Device),
-				RRSeeds(Buffer::Device),
 				triangleBuildInput({}),
 				accelOptions({}),
 				GASOutput(Buffer::Device),
@@ -284,7 +278,7 @@ namespace CUDA
 				paras.trans = (TransInfo*)transInfoDevice;
 				paras.maxPhotonCnt = 8;
 				paras.maxDepth = 8;
-				paras.pt_size = make_uint2(100, 100);
+				paras.pt_size = make_uint2(PT_SIZE_X, PT_SIZE_Y);
 				/*OptixStackSizes stackSizes = { 0 };
 				optixUtilAccumulateStackSizes(programGroups[0], &stackSizes);
 
@@ -333,42 +327,19 @@ namespace CUDA
 				photonBuffer.resize(sizeof(Photon)* paras.maxPhotonCnt* paras.pt_size.x* paras.pt_size.y);
 				photonMapBuffer.resize(sizeof(Photon)* paras.maxPhotonCnt * 2 * paras.pt_size.x * paras.pt_size.y);
 
-				srand((unsigned int)time(0));
-				int seedCnt = paras.pt_size.x * paras.pt_size.y;
-				float2* seedsTemp = new float2[seedCnt];
-				for (int c0(0); c0 < seedCnt; c0++)
-					seedsTemp[c0] = make_float2(float(rand() % 10000) / 10000, float(rand() % 10000) / 10000);
-				pt_emitPositionSeeds.copy(seedsTemp, sizeof(float2)* seedCnt);
-
-				for (int c0(0); c0 < seedCnt; c0++)
-					seedsTemp[c0] = make_float2(float(rand() % 10000) / 10000, float(rand() % 10000) / 10000);
-				pt_emitDirectionSeeds.copy(seedsTemp, sizeof(float2)* seedCnt);
-
-				for (int c0(0); c0 < seedCnt; c0++)
-					seedsTemp[c0] = make_float2(float(rand() % 10000) / 10000, float(rand() % 10000) / 10000);
-				pt_hitDirectionSeeds.copy(seedsTemp, sizeof(float2)* seedCnt);
-				delete[] seedsTemp;
-
-				seedCnt = paras.maxDepth * paras.pt_size.x * paras.pt_size.y;
-				float* RRseedsTemp = new float[seedCnt];
-				for (int c0(0); c0 < seedCnt; c0++)
-					RRseedsTemp[c0] = float(rand() % 10000) / 10000;
-				RRSeeds.copy(sizeof(float)* seedCnt);
-				delete[] RRseedsTemp;
+				srand(time(nullptr));
+				cudaMalloc(&paras.randState, PT_SIZE_X* PT_SIZE_Y * sizeof(curandState));
+				initRandom(paras.randState, rand(), 1024, (PT_SIZE_X* PT_SIZE_Y + 1023) / 1024, PT_SIZE_X *PT_SIZE_Y);
 
 				optixSbtRecordPackHeader(pt_raygen, &pt_raygenData);
 				pt_raygenData.data.lightSource = (LightSource*)lightSourceBuffer.device;
 				pt_raygenData.data.photons = (Photon*)photonBuffer.device;
-				pt_raygenData.data.positionSeeds = (float2*)pt_emitPositionSeeds.device;
-				pt_raygenData.data.directionSeeds = (float2*)pt_emitDirectionSeeds.device;
 				pt_raygenDataBuffer.copy(pt_raygenData);
 
 				optixSbtRecordPackHeader(pt_closestHit, &pt_hitData);
 				pt_hitData.data.normals = (float3*)normals.device;
 				pt_hitData.data.kds = (float3*)kds.device;
 				pt_hitData.data.photons = (Photon*)photonBuffer.device;
-				pt_hitData.data.directionSeeds = (float2*)pt_hitDirectionSeeds.device;
-				pt_hitData.data.RRseeds = (float*)RRSeeds.device;
 				pt_hitDataBuffer.copy(pt_hitData);
 
 				pt_sbt.raygenRecord = pt_raygenDataBuffer;
@@ -439,6 +410,10 @@ namespace CUDA
 				gt_raygenData.data.cameraRayHitDatas = (CameraRayHitData*)cameraRayHitBuffer.device;
 				gt_raygenDataBuffer.copy(gt_raygenData);
 				gt_raygenDataBuffer.unmap();
+			}
+			void terminate()
+			{
+				cudaFree(paras.randState);
 			}
 			void buildKdTree(Photon** photons, int start, int end, int depth, Photon* kdTree,
 				int root, float3 bbmin, float3 bbmax)
@@ -637,6 +612,10 @@ namespace OpenGL
 			test.moveToHost();
 			::printf("---%f\n", *(float*)test.host);*/
 			trans.init(_size);
+		}
+		~PathTracing()
+		{
+			pathTracer.terminate();
 		}
 		virtual void init(FrameScale const& _size) override
 		{

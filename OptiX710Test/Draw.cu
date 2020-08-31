@@ -81,6 +81,10 @@ extern "C" __global__ void __raygen__PhotonEmit()
 	uint2 index = make_uint2(optixGetLaunchIndex());
 	int startIdx = (index.y * paras.pt_size.x + index.x) * paras.maxPhotonCnt;
 
+	curandState* statePtr = paras.randState + index.y * paras.pt_size.x + index.x;
+	curandStateMini state;
+	getCurandState(&state, statePtr);
+
 	float3 position = make_float3(0.0f);
 	float3 dir = make_float3(0.0f);
 
@@ -89,8 +93,8 @@ extern "C" __global__ void __raygen__PhotonEmit()
 
 	if (lightSource->type == LightSource::SPOT)
 	{
-		float2 seed = raygenData->directionSeeds[index.y * paras.pt_size.x + index.x];
 		// uniformly sampling a sphere
+		float2 seed = curand_uniform2(&state);
 		float z = 1 - 2 * seed.x;
 		float r = sqrtf(fmax(0.0f, 1.0f - z * z));
 		float phi = 2 * M_PIf * seed.y;
@@ -104,18 +108,9 @@ extern "C" __global__ void __raygen__PhotonEmit()
 	}
 	else if (lightSource->type == LightSource::SQUARE)
 	{
-		float2 positionSeed = raygenData->positionSeeds[index.y * paras.pt_size.x + index.x];
-		float2 directionSeed = raygenData->directionSeeds[index.y * paras.pt_size.x + index.x];
-		// cosine-weighted hemisphere sampling
-		float3 U, V, W;
-		W = normalize(lightSource->direction);
-		createOnb(W, U, V);
-		float2 scale = randomCircle(directionSeed);
-		float z = 1.0f - dot(scale, scale);
-		z = z > 0.0f ? sqrtf(z) : 0.0f;
-
-		position = lightSource->position + lightSource->edge1 * positionSeed.x + lightSource->edge2 * positionSeed.y;
-		dir = normalize(W * z + U * scale.x + V * scale.y);
+		float2 seed = curand_uniform2(&state);
+		position = lightSource->position + lightSource->edge1 * seed.x + lightSource->edge2 * seed.y;
+		dir = randomDirectionCosN(normalize(lightSource->direction), 1.0f, &state);
 	}
 
 	// initialize photon records
@@ -139,7 +134,8 @@ extern "C" __global__ void __raygen__PhotonEmit()
 		RayRadiance,        // SBT offset
 		RayCount,           // SBT stride
 		RayRadiance,        // missSBTIndex
-		pd0, pd1);
+		pd0, pd1, state.d, state.v[0], state.v[1], state.v[2], state.v[3], state.v[4]);
+	setCurandState(statePtr, &state);
 }
 
 extern "C" __global__ void __closesthit__PhotonHit()
@@ -147,7 +143,8 @@ extern "C" __global__ void __closesthit__PhotonHit()
 	uint2 index = make_uint2(optixGetLaunchIndex());
 	Pt_CloseHitData* closeHitData = (Pt_CloseHitData*)optixGetSbtDataPointer();
 	int primIdx = optixGetPrimitiveIndex();
-	float2 seed = closeHitData->directionSeeds[index.y * paras.pt_size.x + index.x];
+
+	curandStateMini state(getCurandStateFromPayload());
 
 	// calculate the hit point
 	float3 hitPointPosition = optixGetWorldRayOrigin() + optixGetRayTmax() * optixGetWorldRayDirection();
@@ -160,9 +157,6 @@ extern "C" __global__ void __closesthit__PhotonHit()
 
 	float3 newDir;
 	float3 oldDir = optixGetWorldRayDirection();
-
-	// get random seed for Russian roulette
-	float RRSeed = closeHitData->RRseeds[(index.y * paras.pt_size.x + index.x) * paras.maxDepth + prd.depth];
 
 	float3 kd = closeHitData->kds[primIdx];
 	if (fmaxf(kd) > 0.0f)
@@ -179,25 +173,21 @@ extern "C" __global__ void __closesthit__PhotonHit()
 			prd.numDeposits++;
 		}
 
-		float Pd = fmaxf(kd);	// probability of being absorbed
-		// Russian roulette : absorb
-		if (RRSeed > Pd)
-			return;
+		// Russian roulette
+		float Pd = fmaxf(kd);	// probability of being diffused
+		if (curand_uniform(&state) > Pd)
+			return;	// absorb
 
 		prd.energy = kd * prd.energy / Pd;
 
 		// cosine-weighted hemisphere sampling
-		float3 U, V, W;
+		float3 W = { 0.f,0.f,0.f };
 		if (dot(oldDir, hitPointNormal) > 0)
 			W = -normalize(hitPointNormal);
 		else
 			W = normalize(hitPointNormal);
-		createOnb(W, U, V);
-		float2 scale = randomCircle(seed);
-		float z = 1.0f - dot(scale, scale);
-		z = z > 0.0f ? sqrtf(z) : 0.0f;
 
-		newDir = normalize(W * z + U * scale.x + V * scale.y);
+		newDir = randomDirectionCosN(W, 1.0f, &state);
 	}
 
 	prd.depth++;

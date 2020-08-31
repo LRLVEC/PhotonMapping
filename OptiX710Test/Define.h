@@ -71,12 +71,13 @@ struct Rt_CloseHitData
 	CameraRayHitData* cameraRayHitDatas;
 };
 
+#define PT_SIZE_X 100
+#define PT_SIZE_Y 100
+
 struct Pt_RayGenData
 {
 	LightSource* lightSource;
 	Photon* photons;
-	float2* positionSeeds;
-	float2* directionSeeds;
 };
 
 struct Pt_CloseHitData
@@ -84,8 +85,6 @@ struct Pt_CloseHitData
 	float3* normals;
 	float3* kds;
 	Photon* photons;
-	float2* directionSeeds;	// random seeds for sampling
-	float* RRseeds;
 };
 
 struct Parameters
@@ -97,7 +96,7 @@ struct Parameters
 	int maxPhotonCnt;	// max number of records for a ray
 	int maxDepth;		// max depth used in photon tracing
 	uint2 pt_size;
-	curandState* dirRandState;
+	curandState* randState;
 };
 
 struct Gt_RayGenData
