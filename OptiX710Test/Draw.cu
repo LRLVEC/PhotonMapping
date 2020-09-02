@@ -203,7 +203,7 @@ extern "C" __global__ void __closesthit__PhotonHit()
 		RayRadiance,        // SBT offset
 		RayCount,           // SBT stride
 		RayRadiance,        // missSBTIndex
-		pd0, pd1);
+		pd0, pd1, state.d, state.v[0], state.v[1], state.v[2], state.v[3], state.v[4]);
 }
 
 // used in KNN photon search
