@@ -124,6 +124,7 @@ namespace CUDA
 			Buffer vertices;
 			Buffer normals;
 			Buffer kds;
+			Buffer debugDatas;
 			OptixBuildInput triangleBuildInput;
 			OptixAccelBuildOptions accelOptions;
 			Buffer GASOutput;
@@ -190,6 +191,7 @@ namespace CUDA
 				vertices(Buffer::Device),
 				normals(Buffer::Device),
 				kds(Buffer::Device),
+				debugDatas(Buffer::Device),
 				triangleBuildInput({}),
 				accelOptions({}),
 				GASOutput(Buffer::Device),
@@ -204,11 +206,11 @@ namespace CUDA
 
 				float3* kdsTemp = new float3[box.normals.length];
 				for (int c0(0); c0 < box.normals.length; c0++)
-					kdsTemp[c0] = { 1.0f, 1.0f, 1.0f };
-				kdsTemp[20] = make_float3(1.0f, 0.0f, 0.0f);
-				kdsTemp[21] = make_float3(1.0f, 0.0f, 0.0f);
-				kdsTemp[24] = make_float3(0.0f, 1.0f, 0.0f);
-				kdsTemp[25] = make_float3(0.0f, 1.0f, 0.0f);
+					kdsTemp[c0] = { 0.73f, 0.73f, 0.73f };
+				kdsTemp[20] = make_float3(0.65f, 0.05f, 0.05f);
+				kdsTemp[21] = make_float3(0.65f, 0.05f, 0.05f);
+				kdsTemp[24] = make_float3(0.12f, 0.45f, 0.15f);
+				kdsTemp[25] = make_float3(0.12f, 0.45f, 0.15f);
 				kds.copy(kdsTemp, sizeof(float3)* box.normals.length);
 				delete[] kdsTemp;
 
@@ -324,8 +326,8 @@ namespace CUDA
 
 				// photon trace stage
 				// NOTE: photonMapBuffer should be larger in case of overflow due to the kdTree access
-				photonBuffer.resize(sizeof(Photon)* paras.maxPhotonCnt* paras.pt_size.x* paras.pt_size.y);
-				photonMapBuffer.resize(sizeof(Photon)* paras.maxPhotonCnt * 2 * paras.pt_size.x * paras.pt_size.y);
+				photonBuffer.resize(sizeof(Photon)* paras.maxPhotonCnt* PT_SIZE_X* PT_SIZE_Y);
+				photonMapBuffer.resize(sizeof(Photon)* paras.maxPhotonCnt * 2 * PT_SIZE_X * PT_SIZE_Y);
 
 				srand(time(nullptr));
 				cudaMalloc(&paras.randState, PT_SIZE_X* PT_SIZE_Y * sizeof(curandState));
@@ -350,12 +352,20 @@ namespace CUDA
 				pt_sbt.hitgroupRecordStrideInBytes = sizeof(SbtRecord<Pt_CloseHitData>);
 				pt_sbt.hitgroupRecordCount = 1;
 
+				// debug data
+				// NOTE: resize unfinished!
+				int debugDatasCnt = _size.w * _size.h;
+				DebugData* debugDatasTemp = new DebugData[debugDatasCnt];
+				debugDatas.copy(debugDatasTemp, sizeof(DebugData)* debugDatasCnt);
+				delete[] debugDatasTemp;
+
 				// gather stage sbt binding
 				optixSbtRecordPackHeader(gt_raygen, &gt_raygenData);
 				gt_raygenData.data.cameraRayHitDatas = (CameraRayHitData*)cameraRayHitBuffer.device;
 				gt_raygenData.data.normals = (float3*)normals.device;
 				gt_raygenData.data.kds = (float3*)kds.device;
 				gt_raygenData.data.lightSource = (LightSource*)lightSourceBuffer.device;
+				gt_raygenData.data.debugDatas = (DebugData*)debugDatas.device;
 				gt_raygenDataBuffer.copy(gt_raygenData);
 
 				optixSbtRecordPackHeader(gt_closestHit, &gt_hitData);
@@ -382,7 +392,21 @@ namespace CUDA
 					photonFlag = false;
 				}
 				optixLaunch(gt_pip, cuStream, parasBuffer, sizeof(Parameters), &gt_sbt, paras.size.x, paras.size.y, 1);
+				//Gt_debug();
 				frameBuffer.unmap();
+			}
+			void Gt_debug()
+			{
+				debugDatas.map();
+				
+				size_t debugDatasSize = debugDatas.size;
+				int debugDatasCnt = debugDatasSize / sizeof(DebugData);
+				DebugData* debugDatasTemp = new DebugData[debugDatasCnt];
+				cudaMemcpy(debugDatasTemp, debugDatas.device, debugDatasSize, cudaMemcpyDeviceToHost);
+
+				delete[] debugDatasTemp;
+
+				debugDatas.unmap();
 			}
 			virtual void resize(OpenGL::FrameScale const& _size, GLuint _gl)
 			{
@@ -533,7 +557,7 @@ namespace CUDA
 					}
 
 
-				printf("photonBufferCnt: %d, valid cnt: %d\n", photonBufferCnt, validPhotonCnt);
+				//printf("photonBufferCnt: %d, valid cnt: %d\n", photonBufferCnt, validPhotonCnt);
 
 				if (validPhotonCnt > photonMapBufferCnt)
 					validPhotonCnt = photonMapBufferCnt;

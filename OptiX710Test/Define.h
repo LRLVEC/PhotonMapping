@@ -71,8 +71,8 @@ struct Rt_CloseHitData
 	CameraRayHitData* cameraRayHitDatas;
 };
 
-#define PT_SIZE_X 100
-#define PT_SIZE_Y 100
+#define PT_SIZE_X 300
+#define PT_SIZE_Y 300
 
 struct Pt_RayGenData
 {
@@ -99,6 +99,22 @@ struct Parameters
 	curandState* randState;
 };
 
+// used in KNN photon search
+struct HeapPhoton
+{
+	float distance2;
+	float3 flux;
+	float3 kd;
+	float3 dir;
+};
+
+struct DebugData
+{
+
+};
+
+#define COLLECT_RAIDUS 0.005
+
 struct Gt_RayGenData
 {
 	CameraRayHitData* cameraRayHitDatas;
@@ -106,8 +122,8 @@ struct Gt_RayGenData
 	float3* normals;
 	float3* kds;
 	LightSource* lightSource;
+	DebugData* debugDatas;
 };
-
 
 
 // macro used in Kd-Tree building

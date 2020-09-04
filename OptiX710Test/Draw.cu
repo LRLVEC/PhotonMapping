@@ -206,15 +206,6 @@ extern "C" __global__ void __closesthit__PhotonHit()
 		pd0, pd1, state.d, state.v[0], state.v[1], state.v[2], state.v[3], state.v[4]);
 }
 
-// used in KNN photon search
-struct HeapPhoton
-{
-	float distance2;
-	float3 flux;
-	float3 kd;
-	float3 dir;
-};
-
 struct PhotonMaxHeap
 {
 #define PHOTONHEAP_SIZE 31
@@ -278,10 +269,14 @@ struct PhotonMaxHeap
 		}
 	}
 
-#define filter_k 1
+#define filter_k 2
 
 	__device__ __inline__ float3 accumulate(float& radius2)
 	{
+		/*uint2 index = make_uint2(optixGetLaunchIndex());
+		Gt_RayGenData* raygenData = (Gt_RayGenData*)optixGetSbtDataPointer();
+		DebugData& debugData = raygenData->debugDatas[index.y * paras.size.x + index.x];*/
+
 		float3 flux = make_float3(0.0f, 0.0f, 0.0f);
 		float Wpc = 0.0f;	// weight of cone filter
 		// from which side came the camera ray
@@ -291,15 +286,15 @@ struct PhotonMaxHeap
 			radius2 = photons[0].distance2;
 		float radius = sqrtf(radius2);
 
-		for (int c0(0); c0 < currentSize; c0++)
+		for (int c0(0); c0 < currentSize && c0 < 3; c0++)
 		{
 			if (dot(photons[c0].dir, hitPointNormal) * sideFlag <= 0)
 				continue;
-			Wpc = 1.0f - sqrtf(photons[c0].distance2) / (filter_k * radius);
+			Wpc = 1.0f - sqrtf(photons[c0].distance2) / (filter_k * COLLECT_RAIDUS);
 			flux += photons[c0].flux * photons[c0].kd * Wpc;
 		}
 		
-		flux = flux / (M_PIf * radius2) / (1 - 2 / 3 / filter_k) / (paras.pt_size.x * paras.pt_size.y);
+		flux = flux / (M_PIf * radius2) / (1 - 2 / 3 / filter_k) / (PT_SIZE_X * PT_SIZE_Y);
 
 		return flux;
 	}
@@ -327,7 +322,7 @@ extern "C" __global__ void __raygen__Gather()
 	float3 hitPointNormal = raygenData->normals[primIdx];
 	float3 hitPointKd = raygenData->kds[primIdx];
 
-	float radius2 = 0.0001;
+	float radius2 = COLLECT_RAIDUS * COLLECT_RAIDUS;
 
 	int stack[MAX_DEPTH];
 	int stackTop = 0;
