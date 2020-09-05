@@ -216,7 +216,8 @@ namespace CUDA
 
 				lightSource.type = LightSource::SQUARE;
 				lightSource.position = { -0.3f, 0.99f, -0.3f };
-				lightSource.power = { 1.0f, 1.0f, 1.0f };
+				float lightPower = 10.0f;
+				lightSource.power = { lightPower, lightPower, lightPower };
 				lightSource.edge1 = { 0.6f, 0.0f, 0.0f };
 				lightSource.edge2 = { 0.0f, 0.0f, 0.6f };
 				lightSource.direction = { 0.0f, -1.0f, 0.0f };
@@ -278,9 +279,6 @@ namespace CUDA
 				else GASOutput.copy(compation);
 				paras.handle = GASHandle;
 				paras.trans = (TransInfo*)transInfoDevice;
-				paras.maxPhotonCnt = 8;
-				paras.maxDepth = 8;
-				paras.pt_size = make_uint2(PT_SIZE_X, PT_SIZE_Y);
 				/*OptixStackSizes stackSizes = { 0 };
 				optixUtilAccumulateStackSizes(programGroups[0], &stackSizes);
 
@@ -326,8 +324,8 @@ namespace CUDA
 
 				// photon trace stage
 				// NOTE: photonMapBuffer should be larger in case of overflow due to the kdTree access
-				photonBuffer.resize(sizeof(Photon)* paras.maxPhotonCnt* PT_SIZE_X* PT_SIZE_Y);
-				photonMapBuffer.resize(sizeof(Photon)* paras.maxPhotonCnt * 2 * PT_SIZE_X * PT_SIZE_Y);
+				photonBuffer.resize(sizeof(Photon)* PT_MAX_DEPOSIT* PT_SIZE_X* PT_SIZE_Y);
+				photonMapBuffer.resize(sizeof(Photon)* PT_MAX_DEPOSIT * 2 * PT_SIZE_X * PT_SIZE_Y);
 
 				srand(time(nullptr));
 				cudaMalloc(&paras.randState, PT_SIZE_X* PT_SIZE_Y * sizeof(curandState));
@@ -387,7 +385,7 @@ namespace CUDA
 				optixLaunch(rt_pip, cuStream, parasBuffer, sizeof(Parameters), &rt_sbt, paras.size.x, paras.size.y, 1);
 				if (photonFlag == true)
 				{
-					optixLaunch(pt_pip, cuStream, parasBuffer, sizeof(Parameters), &pt_sbt, paras.pt_size.x, paras.pt_size.y, 1);
+					optixLaunch(pt_pip, cuStream, parasBuffer, sizeof(Parameters), &pt_sbt, PT_SIZE_X, PT_SIZE_Y, 1);
 					createPhotonMap();
 					photonFlag = false;
 				}
@@ -550,14 +548,16 @@ namespace CUDA
 						photonData[c0].energy.z > 0.0f)
 					{
 						tempPhotons[validPhotonCnt++] = &photonData[c0];
-						//printf("photon #%d: position  (%f,%f,%f)\n", c0, photonData[c0].position.x, photonData[c0].position.y, photonData[c0].position.z);
-						//printf("           direction (%f,%f,%f)\n", photonData[c0].dir.x, photonData[c0].dir.y, photonData[c0].dir.z);
-						//printf("           normal    (%f,%f,%f)\n", photonData[c0].normal.x, photonData[c0].normal.y, photonData[c0].normal.z);
-						//printf("           energy    (%f,%f,%f)\n", photonData[c0].energy.x, photonData[c0].energy.y, photonData[c0].energy.z);
+						/*
+						printf("photon #%d: position  (%f,%f,%f)\n", c0, photonData[c0].position.x, photonData[c0].position.y, photonData[c0].position.z);
+						printf("           direction (%f,%f,%f)\n", photonData[c0].dir.x, photonData[c0].dir.y, photonData[c0].dir.z);
+						printf("           normal    (%f,%f,%f)\n", photonData[c0].normal.x, photonData[c0].normal.y, photonData[c0].normal.z);
+						printf("           energy    (%f,%f,%f)\n", photonData[c0].energy.x, photonData[c0].energy.y, photonData[c0].energy.z);
+						*/
 					}
 
 
-				//printf("photonBufferCnt: %d, valid cnt: %d\n", photonBufferCnt, validPhotonCnt);
+				printf("photonBufferCnt: %d, valid cnt: %d\n", photonBufferCnt, validPhotonCnt);
 
 				if (validPhotonCnt > photonMapBufferCnt)
 					validPhotonCnt = photonMapBufferCnt;

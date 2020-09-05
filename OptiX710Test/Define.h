@@ -71,8 +71,10 @@ struct Rt_CloseHitData
 	CameraRayHitData* cameraRayHitDatas;
 };
 
-#define PT_SIZE_X 300
-#define PT_SIZE_Y 300
+#define PT_SIZE_X 800
+#define PT_SIZE_Y 800
+#define PT_MAX_DEPTH 8
+#define PT_MAX_DEPOSIT 8
 
 struct Pt_RayGenData
 {
@@ -93,9 +95,6 @@ struct Parameters
 	OptixTraversableHandle handle;
 	TransInfo* trans;
 	uint2 size;
-	int maxPhotonCnt;	// max number of records for a ray
-	int maxDepth;		// max depth used in photon tracing
-	uint2 pt_size;
 	curandState* randState;
 };
 
@@ -113,7 +112,7 @@ struct DebugData
 
 };
 
-#define COLLECT_RAIDUS 0.005
+#define COLLECT_RAIDUS 0.004
 
 struct Gt_RayGenData
 {

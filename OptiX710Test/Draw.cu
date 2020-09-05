@@ -79,9 +79,9 @@ static __device__ __inline__ void createOnb(const float3& n, float3& U, float3& 
 extern "C" __global__ void __raygen__PhotonEmit()
 {
 	uint2 index = make_uint2(optixGetLaunchIndex());
-	int startIdx = (index.y * paras.pt_size.x + index.x) * paras.maxPhotonCnt;
+	int startIdx = (index.y * PT_SIZE_X + index.x) * PT_MAX_DEPOSIT;
 
-	curandState* statePtr = paras.randState + index.y * paras.pt_size.x + index.x;
+	curandState* statePtr = paras.randState + index.y * PT_SIZE_X + index.x;
 	curandStateMini state;
 	getCurandState(&state, statePtr);
 
@@ -115,7 +115,7 @@ extern "C" __global__ void __raygen__PhotonEmit()
 
 	// initialize photon records
 	Photon* photons = raygenData->photons;
-	for (int c0(0); c0 < paras.maxPhotonCnt; c0++)
+	for (int c0(0); c0 < PT_MAX_DEPOSIT; c0++)
 		photons[startIdx + c0].energy = make_float3(0.0f);
 
 	// set ray payload
@@ -192,7 +192,7 @@ extern "C" __global__ void __closesthit__PhotonHit()
 
 	prd.depth++;
 
-	if (prd.numDeposits >= paras.maxPhotonCnt || prd.depth >= paras.maxDepth)
+	if (prd.numDeposits >= PT_MAX_DEPOSIT || prd.depth >= PT_MAX_DEPTH)
 		return;
 
 	pP(&prd, pd0, pd1);
@@ -269,7 +269,7 @@ struct PhotonMaxHeap
 		}
 	}
 
-#define filter_k 2
+#define filter_k 1.1
 
 	__device__ __inline__ float3 accumulate(float& radius2)
 	{
@@ -283,18 +283,18 @@ struct PhotonMaxHeap
 		float sideFlag = dot(cameraRayDir, hitPointNormal);
 
 		if (currentSize > 0)
-			radius2 = photons[0].distance2;
+			radius2 = fmaxf(photons[0].distance2, COLLECT_RAIDUS * COLLECT_RAIDUS);
 		float radius = sqrtf(radius2);
 
-		for (int c0(0); c0 < currentSize && c0 < 3; c0++)
+		for (int c0(0); c0 < currentSize; c0++)
 		{
 			if (dot(photons[c0].dir, hitPointNormal) * sideFlag <= 0)
 				continue;
-			Wpc = 1.0f - sqrtf(photons[c0].distance2) / (filter_k * COLLECT_RAIDUS);
+			Wpc = 1.0f - sqrtf(photons[c0].distance2) / (filter_k * radius);
 			flux += photons[c0].flux * photons[c0].kd * Wpc;
 		}
 		
-		flux = flux / (M_PIf * radius2) / (1 - 2 / 3 / filter_k) / (PT_SIZE_X * PT_SIZE_Y);
+		flux = flux / (M_PIf * radius2) / (1 - 0.6667 / filter_k) / (PT_SIZE_X * PT_SIZE_Y);
 
 		return flux;
 	}
