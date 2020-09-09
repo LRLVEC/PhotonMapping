@@ -109,7 +109,7 @@ struct HeapPhoton
 
 struct DebugData
 {
-
+	// nothing here
 };
 
 #define COLLECT_RAIDUS 0.004
