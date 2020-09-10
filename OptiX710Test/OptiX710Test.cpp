@@ -324,12 +324,12 @@ namespace CUDA
 
 				// photon trace stage
 				// NOTE: photonMapBuffer should be larger in case of overflow due to the kdTree access
-				photonBuffer.resize(sizeof(Photon)* PT_MAX_DEPOSIT* PT_SIZE_X* PT_SIZE_Y);
-				photonMapBuffer.resize(sizeof(Photon)* PT_MAX_DEPOSIT * 2 * PT_SIZE_X * PT_SIZE_Y);
+				photonBuffer.resize(sizeof(Photon)* PT_MAX_DEPOSIT* PT_PHOTON_CNT);
+				photonMapBuffer.resize(sizeof(Photon)* PT_MAX_DEPOSIT * 2 * PT_PHOTON_CNT);
 
 				srand(time(nullptr));
-				cudaMalloc(&paras.randState, PT_SIZE_X* PT_SIZE_Y * sizeof(curandState));
-				initRandom(paras.randState, rand(), 1024, (PT_SIZE_X* PT_SIZE_Y + 1023) / 1024, PT_SIZE_X *PT_SIZE_Y);
+				cudaMalloc(&paras.randState, PT_PHOTON_CNT * sizeof(curandState));
+				initRandom(paras.randState, rand(), 1024, (PT_PHOTON_CNT + 1023) / 1024, PT_PHOTON_CNT);
 
 				optixSbtRecordPackHeader(pt_raygen, &pt_raygenData);
 				pt_raygenData.data.lightSource = (LightSource*)lightSourceBuffer.device;
@@ -385,7 +385,7 @@ namespace CUDA
 				optixLaunch(rt_pip, cuStream, parasBuffer, sizeof(Parameters), &rt_sbt, paras.size.x, paras.size.y, 1);
 				if (photonFlag == true)
 				{
-					optixLaunch(pt_pip, cuStream, parasBuffer, sizeof(Parameters), &pt_sbt, PT_SIZE_X, PT_SIZE_Y, 1);
+					optixLaunch(pt_pip, cuStream, parasBuffer, sizeof(Parameters), &pt_sbt, PT_PHOTON_CNT, 1, 1);
 					createPhotonMap();
 					photonFlag = false;
 				}

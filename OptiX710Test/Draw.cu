@@ -78,10 +78,10 @@ static __device__ __inline__ void createOnb(const float3& n, float3& U, float3& 
 
 extern "C" __global__ void __raygen__PhotonEmit()
 {
-	uint2 index = make_uint2(optixGetLaunchIndex());
-	int startIdx = (index.y * PT_SIZE_X + index.x) * PT_MAX_DEPOSIT;
+	unsigned int index = optixGetLaunchIndex().x;
+	int startIdx = index * PT_MAX_DEPOSIT;
 
-	curandState* statePtr = paras.randState + index.y * PT_SIZE_X + index.x;
+	curandState* statePtr = paras.randState + index;
 	curandStateMini state;
 	getCurandState(&state, statePtr);
 
@@ -294,7 +294,7 @@ struct PhotonMaxHeap
 			flux += photons[c0].flux * photons[c0].kd * Wpc;
 		}
 		
-		flux = flux / (M_PIf * radius2) / (1 - 0.6667 / filter_k) / (PT_SIZE_X * PT_SIZE_Y);
+		flux = flux / (M_PIf * radius2) / (1 - 0.6667f / filter_k) / PT_PHOTON_CNT;
 
 		return flux;
 	}
