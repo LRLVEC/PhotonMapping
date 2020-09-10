@@ -392,29 +392,39 @@ extern "C" __global__ void __raygen__Gather()
 	shadowRayDir = normalize(shadowRayDir);
 	float cosDN = fabsf(dot(shadowRayDir, hitPointNormal));// NOTE: fabsf?
 
-	float attenuation = 1.0f;
-	unsigned int pd0, pd1;
-	pP(&attenuation, pd0, pd1);
-	unsigned int pd2, pd3;
-	pP(&Tmax, pd2, pd3);
-	optixTrace(paras.handle, hitPointPosition, shadowRayDir,
-		0.001f, 1e16f,
-		0.0f, OptixVisibilityMask(255), OPTIX_RAY_FLAG_NONE,
-		RayRadiance,        // SBT offset
-		RayCount,           // SBT stride
-		RayRadiance,        // missSBTIndex
-		pd0, pd1, pd2, pd3);
+	float3 directFlux = make_float3(0.0f, 0.0f, 0.0f);
 
-	float3 directFlux = lightSource->power * attenuation * hitPointKd * cosDN;
+	if (dot(shadowRayDir, hitPointNormal) * dot(cameraRayHitData.rayDir, hitPointNormal) < 0)
+	{
+		float attenuation = 1.0f;
+		unsigned int pd0, pd1;
+		pP(&attenuation, pd0, pd1);
+		unsigned int pd2, pd3;
+		pP(&Tmax, pd2, pd3);
+		optixTrace(paras.handle, hitPointPosition, shadowRayDir,
+			0.001f, 1e16f,
+			0.0f, OptixVisibilityMask(255), OPTIX_RAY_FLAG_NONE,
+			RayRadiance,        // SBT offset
+			RayCount,           // SBT stride
+			RayRadiance,        // missSBTIndex
+			pd0, pd1, pd2, pd3);
 
-	//float3 color = directFlux;
-	float3 color = indirectFlux;
+		directFlux = lightSource->power * attenuation * hitPointKd * cosDN;
+	}	
+
+	float3 color = 0.1f * directFlux;
+	//float3 color = indirectFlux;
 	//float3 color = directFlux + indirectFlux;
 
 	paras.image[index.y * paras.size.x + index.x] = make_float4(color, 1.0f);
 }
 
 extern "C" __global__ void __closesthit__ShadowRayHit()
+{
+	
+}
+
+extern "C" __global__ void __anyhit__ShadowRayHit()
 {
 	unsigned int pd0, pd1;
 	unsigned int pd2, pd3;

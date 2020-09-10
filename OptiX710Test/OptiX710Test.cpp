@@ -164,7 +164,7 @@ namespace CUDA
 				pt_raygen(Vector<String<char>>("__raygen__PhotonEmit"), Program::RayGen, &pt_programGroupOptions, context, &mm),
 				pt_closestHit(Vector<String<char>>("__closesthit__PhotonHit"), Program::HitGroup, &pt_programGroupOptions, context, &mm),
 				gt_raygen(Vector<String<char>>("__raygen__Gather"), Program::RayGen, &gt_programGroupOptions, context, &mm),
-				gt_closestHit(Vector<String<char>>("__closesthit__ShadowRayHit"), Program::HitGroup, &gt_programGroupOptions, context, &mm),
+				gt_closestHit(Vector<String<char>>("__closesthit__ShadowRayHit").pushBack("__anyhit__ShadowRayHit"), Program::HitGroup, &gt_programGroupOptions, context, &mm),
 				rt_pipelineLinkOptions{ 1,OPTIX_COMPILE_DEBUG_LEVEL_FULL },//no overrideUsesMotionBlur in OptiX7.1.0
 				pt_pipelineLinkOptions{ 10,OPTIX_COMPILE_DEBUG_LEVEL_FULL }, // NOTE: maxDepth = 10 in photon trace stage
 				gt_pipelineLinkOptions{ 1,OPTIX_COMPILE_DEBUG_LEVEL_FULL },
@@ -230,8 +230,8 @@ namespace CUDA
 
 				uint32_t triangle_input_flags[1] =  // One per SBT record for this build input
 				{
-					OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT
-					//OPTIX_GEOMETRY_FLAG_NONE
+					//OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT
+					OPTIX_GEOMETRY_FLAG_NONE
 				};
 
 				triangleBuildInput.type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
