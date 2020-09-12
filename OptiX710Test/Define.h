@@ -71,8 +71,8 @@ struct Rt_CloseHitData
 	CameraRayHitData* cameraRayHitDatas;
 };
 
-#define PT_SIZE_X 800
-#define PT_SIZE_Y 800
+#define PT_SIZE_X 400
+#define PT_SIZE_Y 400
 #define PT_MAX_DEPTH 8
 #define PT_MAX_DEPOSIT 8
 
@@ -112,7 +112,7 @@ struct DebugData
 	// nothing here
 };
 
-#define COLLECT_RAIDUS 0.004
+#define COLLECT_RAIDUS 0.008f
 
 struct Gt_RayGenData
 {

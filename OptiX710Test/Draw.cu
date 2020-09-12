@@ -294,7 +294,7 @@ struct PhotonMaxHeap
 			flux += photons[c0].flux * photons[c0].kd * Wpc;
 		}
 		
-		flux = flux / (M_PIf * radius2) / (1 - 0.6667 / filter_k) / (PT_SIZE_X * PT_SIZE_Y);
+		flux = flux / (M_PIf * radius2) / (1 - 0.6667f / filter_k) / (PT_SIZE_X * PT_SIZE_Y);
 
 		return flux;
 	}
