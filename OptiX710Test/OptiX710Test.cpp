@@ -164,7 +164,7 @@ namespace CUDA
 				pt_raygen(Vector<String<char>>("__raygen__PhotonEmit"), Program::RayGen, &pt_programGroupOptions, context, &mm),
 				pt_closestHit(Vector<String<char>>("__closesthit__PhotonHit"), Program::HitGroup, &pt_programGroupOptions, context, &mm),
 				gt_raygen(Vector<String<char>>("__raygen__Gather"), Program::RayGen, &gt_programGroupOptions, context, &mm),
-				gt_closestHit(Vector<String<char>>("__closesthit__ShadowRayHit"), Program::HitGroup, &gt_programGroupOptions, context, &mm),
+				gt_closestHit(Vector<String<char>>("__closesthit__ShadowRayHit").pushBack("__anyhit__ShadowRayHit"), Program::HitGroup, &gt_programGroupOptions, context, &mm),
 				rt_pipelineLinkOptions{ 1,OPTIX_COMPILE_DEBUG_LEVEL_FULL },//no overrideUsesMotionBlur in OptiX7.1.0
 				pt_pipelineLinkOptions{ 10,OPTIX_COMPILE_DEBUG_LEVEL_FULL }, // NOTE: maxDepth = 10 in photon trace stage
 				gt_pipelineLinkOptions{ 1,OPTIX_COMPILE_DEBUG_LEVEL_FULL },
@@ -230,8 +230,8 @@ namespace CUDA
 
 				uint32_t triangle_input_flags[1] =  // One per SBT record for this build input
 				{
-					OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT
-					//OPTIX_GEOMETRY_FLAG_NONE
+					//OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT
+					OPTIX_GEOMETRY_FLAG_NONE
 				};
 
 				triangleBuildInput.type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
@@ -324,12 +324,12 @@ namespace CUDA
 
 				// photon trace stage
 				// NOTE: photonMapBuffer should be larger in case of overflow due to the kdTree access
-				photonBuffer.resize(sizeof(Photon)* PT_MAX_DEPOSIT* PT_SIZE_X* PT_SIZE_Y);
-				photonMapBuffer.resize(sizeof(Photon)* PT_MAX_DEPOSIT * 2 * PT_SIZE_X * PT_SIZE_Y);
+				photonBuffer.resize(sizeof(Photon)* PT_MAX_DEPOSIT* PT_PHOTON_CNT);
+				photonMapBuffer.resize(sizeof(Photon)* PT_MAX_DEPOSIT * 2 * PT_PHOTON_CNT);
 
 				srand(time(nullptr));
-				cudaMalloc(&paras.randState, PT_SIZE_X* PT_SIZE_Y * sizeof(curandState));
-				initRandom(paras.randState, rand(), 1024, (PT_SIZE_X* PT_SIZE_Y + 1023) / 1024, PT_SIZE_X *PT_SIZE_Y);
+				cudaMalloc(&paras.randState, PT_PHOTON_CNT * sizeof(curandState));
+				initRandom(paras.randState, rand(), 1024, (PT_PHOTON_CNT + 1023) / 1024, PT_PHOTON_CNT);
 
 				optixSbtRecordPackHeader(pt_raygen, &pt_raygenData);
 				pt_raygenData.data.lightSource = (LightSource*)lightSourceBuffer.device;
@@ -385,7 +385,7 @@ namespace CUDA
 				optixLaunch(rt_pip, cuStream, parasBuffer, sizeof(Parameters), &rt_sbt, paras.size.x, paras.size.y, 1);
 				if (photonFlag == true)
 				{
-					optixLaunch(pt_pip, cuStream, parasBuffer, sizeof(Parameters), &pt_sbt, PT_SIZE_X, PT_SIZE_Y, 1);
+					optixLaunch(pt_pip, cuStream, parasBuffer, sizeof(Parameters), &pt_sbt, PT_PHOTON_CNT, 1, 1);
 					createPhotonMap();
 					photonFlag = false;
 				}

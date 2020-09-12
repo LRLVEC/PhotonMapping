@@ -78,10 +78,10 @@ static __device__ __inline__ void createOnb(const float3& n, float3& U, float3& 
 
 extern "C" __global__ void __raygen__PhotonEmit()
 {
-	uint2 index = make_uint2(optixGetLaunchIndex());
-	int startIdx = (index.y * PT_SIZE_X + index.x) * PT_MAX_DEPOSIT;
+	unsigned int index = optixGetLaunchIndex().x;
+	int startIdx = index * PT_MAX_DEPOSIT;
 
-	curandState* statePtr = paras.randState + index.y * PT_SIZE_X + index.x;
+	curandState* statePtr = paras.randState + index;
 	curandStateMini state;
 	getCurandState(&state, statePtr);
 
@@ -294,7 +294,7 @@ struct PhotonMaxHeap
 			flux += photons[c0].flux * photons[c0].kd * Wpc;
 		}
 		
-		flux = flux / (M_PIf * radius2) / (1 - 0.6667f / filter_k) / (PT_SIZE_X * PT_SIZE_Y);
+		flux = flux / (M_PIf * radius2) / (1 - 0.6667f / filter_k) / PT_PHOTON_CNT;
 
 		return flux;
 	}
@@ -392,29 +392,39 @@ extern "C" __global__ void __raygen__Gather()
 	shadowRayDir = normalize(shadowRayDir);
 	float cosDN = fabsf(dot(shadowRayDir, hitPointNormal));// NOTE: fabsf?
 
-	float attenuation = 1.0f;
-	unsigned int pd0, pd1;
-	pP(&attenuation, pd0, pd1);
-	unsigned int pd2, pd3;
-	pP(&Tmax, pd2, pd3);
-	optixTrace(paras.handle, hitPointPosition, shadowRayDir,
-		0.001f, 1e16f,
-		0.0f, OptixVisibilityMask(255), OPTIX_RAY_FLAG_NONE,
-		RayRadiance,        // SBT offset
-		RayCount,           // SBT stride
-		RayRadiance,        // missSBTIndex
-		pd0, pd1, pd2, pd3);
+	float3 directFlux = make_float3(0.0f, 0.0f, 0.0f);
 
-	float3 directFlux = lightSource->power * attenuation * hitPointKd * cosDN;
+	if (dot(shadowRayDir, hitPointNormal) * dot(cameraRayHitData.rayDir, hitPointNormal) < 0)
+	{
+		float attenuation = 1.0f;
+		unsigned int pd0, pd1;
+		pP(&attenuation, pd0, pd1);
+		unsigned int pd2, pd3;
+		pP(&Tmax, pd2, pd3);
+		optixTrace(paras.handle, hitPointPosition, shadowRayDir,
+			0.001f, 1e16f,
+			0.0f, OptixVisibilityMask(255), OPTIX_RAY_FLAG_NONE,
+			RayRadiance,        // SBT offset
+			RayCount,           // SBT stride
+			RayRadiance,        // missSBTIndex
+			pd0, pd1, pd2, pd3);
 
-	//float3 color = directFlux;
-	float3 color = indirectFlux;
+		directFlux = lightSource->power * attenuation * hitPointKd * cosDN;
+	}	
+
+	float3 color = 0.1f * directFlux;
+	//float3 color = indirectFlux;
 	//float3 color = directFlux + indirectFlux;
 
 	paras.image[index.y * paras.size.x + index.x] = make_float4(color, 1.0f);
 }
 
 extern "C" __global__ void __closesthit__ShadowRayHit()
+{
+	
+}
+
+extern "C" __global__ void __anyhit__ShadowRayHit()
 {
 	unsigned int pd0, pd1;
 	unsigned int pd2, pd3;
