@@ -73,49 +73,39 @@ namespace CUDA
 			Context context;
 			OptixModuleCompileOptions rt_moduleCompileOptions;
 			OptixModuleCompileOptions pt_moduleCompileOptions;
-			OptixModuleCompileOptions gt_moduleCompileOptions;
 			OptixPipelineCompileOptions rt_pipelineCompileOptions;
 			OptixPipelineCompileOptions pt_pipelineCompileOptions;
-			OptixPipelineCompileOptions gt_pipelineCompileOptions;
 			ModuleManager mm;
 			OptixProgramGroupOptions rt_programGroupOptions;
 			OptixProgramGroupOptions pt_programGroupOptions;
-			OptixProgramGroupOptions gt_programGroupOptions;
-			Program miss;
 			Program rt_raygen;
-			Program rt_closestHit;
+			Program rt_hitRayRadiance;
+			Program rt_hitShadowRay;
+			Program rt_missRayRadiance;
+			Program rt_missShadowRay;
 			Program pt_raygen;
 			Program pt_closestHit;
-			Program gt_raygen;
-			Program gt_closestHit;
+			Program pt_miss;
 			OptixPipelineLinkOptions rt_pipelineLinkOptions;
 			OptixPipelineLinkOptions pt_pipelineLinkOptions;
-			OptixPipelineLinkOptions gt_pipelineLinkOptions;
 			Pipeline rt_pip;
 			Pipeline pt_pip;
-			Pipeline gt_pip;
-			SbtRecord<int> missData;
 			SbtRecord<Rt_RayGenData> rt_raygenData;
-			SbtRecord<Rt_CloseHitData> rt_hitData;
+			SbtRecord<Rt_HitData> rt_hitDatas[RayCount];
 			SbtRecord<Pt_RayGenData> pt_raygenData;
-			SbtRecord<Pt_CloseHitData> pt_hitData;
-			SbtRecord<Gt_RayGenData> gt_raygenData;
-			SbtRecord<int> gt_hitData;
+			SbtRecord<Pt_HitData> pt_hitData;
 			LightSource lightSource;
 			Buffer lightSourceBuffer;
-			Buffer cameraRayHitBuffer;
 			Buffer photonBuffer;
 			Buffer photonMapBuffer;
-			Buffer missDataBuffer;
 			Buffer rt_raygenDataBuffer;
 			Buffer rt_hitDataBuffer;
+			Buffer rt_missDataBuffer;
 			Buffer pt_raygenDataBuffer;
 			Buffer pt_hitDataBuffer;
-			Buffer gt_raygenDataBuffer;
-			Buffer gt_hitDataBuffer;
+			Buffer pt_missDataBuffer;
 			OptixShaderBindingTable rt_sbt;
 			OptixShaderBindingTable pt_sbt;
-			OptixShaderBindingTable gt_sbt;
 			Buffer frameBuffer;
 			CUstream cuStream;
 			Parameters paras;
@@ -141,50 +131,38 @@ namespace CUDA
 					OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
 					OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
 					OPTIX_COMPILE_DEBUG_LEVEL_FULL },
-				gt_moduleCompileOptions{
-					OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-					OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
-					OPTIX_COMPILE_DEBUG_LEVEL_FULL },
 				rt_pipelineCompileOptions{ false,
 					OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
 					8,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },//OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE: new in OptiX7.1.0
 				pt_pipelineCompileOptions{ false,
 					OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
 					8,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },
-				gt_pipelineCompileOptions{ false,
-					OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
-					8,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },
 				mm(&_sourceManager->folder, context, &rt_moduleCompileOptions, &rt_pipelineCompileOptions),
 				rt_programGroupOptions{},
 				pt_programGroupOptions{},
-				gt_programGroupOptions{},
-				miss(Vector<String<char>>("__miss__Ahh"), Program::Miss, &rt_programGroupOptions, context, &mm),
+				pt_miss(Vector<String<char>>("__miss__Ahh"), Program::Miss, &rt_programGroupOptions, context, &mm),
 				rt_raygen(Vector<String<char>>("__raygen__RayAllocator"), Program::RayGen, &rt_programGroupOptions, context, &mm),
-				rt_closestHit(Vector<String<char>>("__closesthit__RayHit"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
+				rt_hitRayRadiance(Vector<String<char>>("__closesthit__RayRadiance"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
+				rt_hitShadowRay(Vector<String<char>>("__closesthit__ShadowRay"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
+				rt_missRayRadiance(Vector<String<char>>("__miss__RayRadiance"), Program::Miss, &rt_programGroupOptions, context, &mm),
+				rt_missShadowRay(Vector<String<char>>("__miss__ShadowRay"), Program::Miss, &rt_programGroupOptions, context, &mm),
 				pt_raygen(Vector<String<char>>("__raygen__PhotonEmit"), Program::RayGen, &pt_programGroupOptions, context, &mm),
 				pt_closestHit(Vector<String<char>>("__closesthit__PhotonHit"), Program::HitGroup, &pt_programGroupOptions, context, &mm),
-				gt_raygen(Vector<String<char>>("__raygen__Gather"), Program::RayGen, &gt_programGroupOptions, context, &mm),
-				gt_closestHit(Vector<String<char>>("__closesthit__ShadowRayHit").pushBack("__anyhit__ShadowRayHit"), Program::HitGroup, &gt_programGroupOptions, context, &mm),
 				rt_pipelineLinkOptions{ 1,OPTIX_COMPILE_DEBUG_LEVEL_FULL },//no overrideUsesMotionBlur in OptiX7.1.0
 				pt_pipelineLinkOptions{ 10,OPTIX_COMPILE_DEBUG_LEVEL_FULL }, // NOTE: maxDepth = 10 in photon trace stage
-				gt_pipelineLinkOptions{ 1,OPTIX_COMPILE_DEBUG_LEVEL_FULL },
-				rt_pip(context, &rt_pipelineCompileOptions, &rt_pipelineLinkOptions, { rt_raygen ,rt_closestHit, miss }),
-				pt_pip(context, &pt_pipelineCompileOptions, &pt_pipelineLinkOptions, { pt_raygen ,pt_closestHit, miss }),
-				gt_pip(context, &gt_pipelineCompileOptions, &gt_pipelineLinkOptions, { gt_raygen ,gt_closestHit, miss }),//NOTE:it still workds replaced by rt_closestHit, why?
+				rt_pip(context, &rt_pipelineCompileOptions, &rt_pipelineLinkOptions, { rt_raygen ,rt_hitRayRadiance, rt_hitShadowRay, rt_missRayRadiance, rt_missShadowRay }),
+				pt_pip(context, &pt_pipelineCompileOptions, &pt_pipelineLinkOptions, { pt_raygen ,pt_closestHit, pt_miss }),
 				lightSourceBuffer(lightSource, false),
-				cameraRayHitBuffer(Buffer::Device),
 				photonBuffer(Buffer::Device),
 				photonMapBuffer(Buffer::Device),
-				missDataBuffer(missData, false),
+				pt_missDataBuffer(Buffer::Device),
 				rt_raygenDataBuffer(rt_raygenData, false),
-				rt_hitDataBuffer(rt_hitData, false),
+				rt_hitDataBuffer(Buffer::Device),
+				rt_missDataBuffer(Buffer::Device),
 				pt_raygenDataBuffer(pt_raygenData, false),
 				pt_hitDataBuffer(pt_hitData, false),
-				gt_raygenDataBuffer(gt_raygenData, false),
-				gt_hitDataBuffer(gt_hitData, false),
 				rt_sbt({}),
 				pt_sbt({}),
-				gt_sbt({}),
 				frameBuffer(*dr),
 				parasBuffer(paras, false),
 				box(_sourceManager->folder.find("resources/boxnew.stl").readSTL()),
@@ -214,12 +192,9 @@ namespace CUDA
 				kds.copy(kdsTemp, sizeof(float3)* box.normals.length);
 				delete[] kdsTemp;
 
-				lightSource.type = LightSource::SQUARE;
-				lightSource.position = { -0.3f, 0.99f, -0.3f };
+				lightSource.position = { 0.0f, 0.99f, 0.0f };
 				float lightPower = 10.0f;
 				lightSource.power = { lightPower, lightPower, lightPower };
-				lightSource.edge1 = { 0.6f, 0.0f, 0.0f };
-				lightSource.edge2 = { 0.0f, 0.0f, 0.6f };
 				lightSource.direction = { 0.0f, -1.0f, 0.0f };
 
 				/*lightSource.type = LightSource::SPOT;
@@ -298,29 +273,33 @@ namespace CUDA
 					direct_callable_stack_size_from_traversal,
 					direct_callable_stack_size_from_state,
 					continuation_stack_size, 3);*/
-				cameraRayHitBuffer.resize(sizeof(CameraRayHitData)* _size.w* _size.h);
 
 				// ray trace stage
 				optixSbtRecordPackHeader(rt_raygen, &rt_raygenData);
-				rt_raygenData.data.cameraRayHitDatas = (CameraRayHitData*)cameraRayHitBuffer.device;
 				rt_raygenDataBuffer.copy(rt_raygenData);
 
-				optixSbtRecordPackHeader(miss, &missData);
-				missDataBuffer.copy(missData);
+				optixSbtRecordPackHeader(rt_hitRayRadiance, &rt_hitDatas[RayRadiance]);
+				rt_hitDatas[RayRadiance].data.normals = (float3*)normals.device;
+				rt_hitDatas[RayRadiance].data.kds = (float3*)kds.device;
+				rt_hitDatas[RayRadiance].data.lightSource = (LightSource*)lightSourceBuffer.device;
+				optixSbtRecordPackHeader(rt_hitShadowRay, &rt_hitDatas[ShadowRay]);
+				rt_hitDatas[ShadowRay].data.normals = (float3*)normals.device;
+				rt_hitDatas[ShadowRay].data.kds = (float3*)kds.device;
+				rt_hitDatas[ShadowRay].data.lightSource = (LightSource*)lightSourceBuffer.device;
+				rt_hitDataBuffer.copy(rt_hitDatas, sizeof(rt_hitDatas));
 
-				optixSbtRecordPackHeader(rt_closestHit, &rt_hitData);
-				rt_hitData.data.normals = (float3*)normals.device;
-				rt_hitData.data.kds = (float3*)kds.device;
-				rt_hitData.data.cameraRayHitDatas = (CameraRayHitData*)cameraRayHitBuffer.device;
-				rt_hitDataBuffer.copy(rt_hitData);
+				SbtRecord<int> rt_missDatas[RayCount];
+				optixSbtRecordPackHeader(rt_missRayRadiance, &rt_missDatas[RayRadiance]);
+				optixSbtRecordPackHeader(rt_missShadowRay, &rt_missDatas[ShadowRay]);
+				rt_missDataBuffer.copy(rt_missDatas, sizeof(rt_missDatas));
 
 				rt_sbt.raygenRecord = rt_raygenDataBuffer;
-				rt_sbt.missRecordBase = missDataBuffer;
+				rt_sbt.missRecordBase = rt_missDataBuffer;
 				rt_sbt.missRecordStrideInBytes = sizeof(SbtRecord<int>);
-				rt_sbt.missRecordCount = 1;
+				rt_sbt.missRecordCount = RayCount;
 				rt_sbt.hitgroupRecordBase = rt_hitDataBuffer;
-				rt_sbt.hitgroupRecordStrideInBytes = sizeof(SbtRecord<Rt_CloseHitData>);
-				rt_sbt.hitgroupRecordCount = 1;
+				rt_sbt.hitgroupRecordStrideInBytes = sizeof(SbtRecord<Rt_HitData>);
+				rt_sbt.hitgroupRecordCount = RayCount;
 
 				// photon trace stage
 				// NOTE: photonMapBuffer should be larger in case of overflow due to the kdTree access
@@ -342,54 +321,37 @@ namespace CUDA
 				pt_hitData.data.photons = (Photon*)photonBuffer.device;
 				pt_hitDataBuffer.copy(pt_hitData);
 
+				SbtRecord<int> pt_missData;
+				optixSbtRecordPackHeader(pt_miss, &pt_missData);
+				pt_missDataBuffer.copy(pt_missData);
+
 				pt_sbt.raygenRecord = pt_raygenDataBuffer;
-				pt_sbt.missRecordBase = missDataBuffer;
+				pt_sbt.missRecordBase = pt_missDataBuffer;
 				pt_sbt.missRecordStrideInBytes = sizeof(SbtRecord<int>);
 				pt_sbt.missRecordCount = 1;
 				pt_sbt.hitgroupRecordBase = pt_hitDataBuffer;
-				pt_sbt.hitgroupRecordStrideInBytes = sizeof(SbtRecord<Pt_CloseHitData>);
+				pt_sbt.hitgroupRecordStrideInBytes = sizeof(SbtRecord<Pt_HitData>);
 				pt_sbt.hitgroupRecordCount = 1;
 
-				// debug data
-				// NOTE: resize unfinished!
-				int debugDatasCnt = _size.w * _size.h;
-				DebugData* debugDatasTemp = new DebugData[debugDatasCnt];
-				debugDatas.copy(debugDatasTemp, sizeof(DebugData)* debugDatasCnt);
-				delete[] debugDatasTemp;
-
-				// gather stage sbt binding
-				optixSbtRecordPackHeader(gt_raygen, &gt_raygenData);
-				gt_raygenData.data.cameraRayHitDatas = (CameraRayHitData*)cameraRayHitBuffer.device;
-				gt_raygenData.data.normals = (float3*)normals.device;
-				gt_raygenData.data.kds = (float3*)kds.device;
-				gt_raygenData.data.lightSource = (LightSource*)lightSourceBuffer.device;
-				gt_raygenData.data.debugDatas = (DebugData*)debugDatas.device;
-				gt_raygenDataBuffer.copy(gt_raygenData);
-
-				optixSbtRecordPackHeader(gt_closestHit, &gt_hitData);
-				gt_hitDataBuffer.copy(gt_hitData);
-
-				gt_sbt.raygenRecord = gt_raygenDataBuffer;
-				gt_sbt.missRecordBase = missDataBuffer;
-				gt_sbt.missRecordStrideInBytes = sizeof(SbtRecord<int>);
-				gt_sbt.missRecordCount = 1;
-				gt_sbt.hitgroupRecordBase = gt_hitDataBuffer;
-				gt_sbt.hitgroupRecordStrideInBytes = sizeof(SbtRecord<int>);
-				gt_sbt.hitgroupRecordCount = 1;
+				//// debug data
+				//// NOTE: resize unfinished!
+				//int debugDatasCnt = _size.w * _size.h;
+				//DebugData* debugDatasTemp = new DebugData[debugDatasCnt];
+				//debugDatas.copy(debugDatasTemp, sizeof(DebugData)* debugDatasCnt);
+				//delete[] debugDatasTemp;
 
 				cudaStreamCreate(&cuStream);
 			}
 			virtual void run()
 			{
 				frameBuffer.map();
-				optixLaunch(rt_pip, cuStream, parasBuffer, sizeof(Parameters), &rt_sbt, paras.size.x, paras.size.y, 1);
 				if (photonFlag == true)
 				{
 					optixLaunch(pt_pip, cuStream, parasBuffer, sizeof(Parameters), &pt_sbt, PT_PHOTON_CNT, 1, 1);
 					createPhotonMap();
 					photonFlag = false;
 				}
-				optixLaunch(gt_pip, cuStream, parasBuffer, sizeof(Parameters), &gt_sbt, paras.size.x, paras.size.y, 1);
+				optixLaunch(rt_pip, cuStream, parasBuffer, sizeof(Parameters), &rt_sbt, paras.size.x, paras.size.y, 1);
 				//Gt_debug();
 				frameBuffer.unmap();
 			}
@@ -414,24 +376,6 @@ namespace CUDA
 				paras.size = make_uint2(_size.w, _size.h);
 				parasBuffer.copy(paras);
 				frameBuffer.unmap();
-
-				// resize the cameraRayHitBuffer
-				cameraRayHitBuffer.resize(sizeof(CameraRayHitData) * _size.w * _size.h);
-
-				rt_raygenDataBuffer.map();
-				rt_raygenData.data.cameraRayHitDatas = (CameraRayHitData*)cameraRayHitBuffer.device;
-				rt_raygenDataBuffer.copy(rt_raygenData);
-				rt_raygenDataBuffer.unmap();
-
-				rt_hitDataBuffer.map();
-				rt_hitData.data.cameraRayHitDatas = (CameraRayHitData*)cameraRayHitBuffer.device;
-				rt_hitDataBuffer.copy(rt_hitData);
-				rt_hitDataBuffer.unmap();
-
-				gt_raygenDataBuffer.map();
-				gt_raygenData.data.cameraRayHitDatas = (CameraRayHitData*)cameraRayHitBuffer.device;
-				gt_raygenDataBuffer.copy(gt_raygenData);
-				gt_raygenDataBuffer.unmap();
 			}
 			void terminate()
 			{
@@ -593,9 +537,11 @@ namespace CUDA
 				photonMapBuffer.copy(photonMapData, photonMapBufferSize);
 
 				// update the sbt
-				gt_raygenData.data.photonMap = (Photon*)photonMapBuffer.device;
-				gt_raygenDataBuffer.copy(gt_raygenData);
-				gt_raygenDataBuffer.unmap();
+				rt_hitDataBuffer.map();
+				rt_hitDatas[RayRadiance].data.photonMap = (Photon*)photonMapBuffer.device;
+				rt_hitDatas[ShadowRay].data.photonMap = (Photon*)photonMapBuffer.device;
+				rt_hitDataBuffer.copy(rt_hitDatas, sizeof(rt_hitDatas));
+				rt_hitDataBuffer.unmap();
 
 				// free memory
 				delete[] photonData;

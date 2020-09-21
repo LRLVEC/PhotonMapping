@@ -15,6 +15,7 @@ using TransInfo = CUDA::OptiX::Trans::TransInfo;
 enum RayType
 {
 	RayRadiance = 0,
+	ShadowRay = 1,
 	RayCount
 };
 struct RayData
@@ -24,21 +25,9 @@ struct RayData
 
 struct LightSource
 {
-	enum LightType { SPOT, SQUARE }type;
 	float3 position;
 	float3 power;
-	// square lightsource
-	float3 edge1;
-	float3 edge2;
 	float3 direction;
-};
-
-// information of the hit point of the camera ray
-struct CameraRayHitData
-{
-	float3 position;	// position of the hit point
-	float3 rayDir;		// direction of the camera ray
-	int primIdx;		// index of the hit primitive, -1 if miss
 };
 
 struct Photon
@@ -61,14 +50,15 @@ struct PhotonPrd
 // data passed to Rt_RayGen
 struct Rt_RayGenData
 {
-	CameraRayHitData* cameraRayHitDatas;	// to store the information of hit point
+	
 };
 
-struct Rt_CloseHitData
+struct Rt_HitData
 {
 	float3* normals;
 	float3* kds;
-	CameraRayHitData* cameraRayHitDatas;
+	LightSource* lightSource;
+	Photon* photonMap; 
 };
 
 #define PT_PHOTON_CNT 640000
@@ -81,7 +71,7 @@ struct Pt_RayGenData
 	Photon* photons;
 };
 
-struct Pt_CloseHitData
+struct Pt_HitData
 {
 	float3* normals;
 	float3* kds;
@@ -112,17 +102,6 @@ struct DebugData
 };
 
 #define COLLECT_RAIDUS 0.005f
-
-struct Gt_RayGenData
-{
-	CameraRayHitData* cameraRayHitDatas;
-	Photon* photonMap;
-	float3* normals;
-	float3* kds;
-	LightSource* lightSource;
-	DebugData* debugDatas;
-};
-
 
 // macro used in Kd-Tree building
 #define PPM_X ( 1 << 0 )
