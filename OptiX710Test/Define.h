@@ -36,7 +36,17 @@ struct Photon
 	float3 normal;
 	float3 dir;
 	float3 energy;
-	int axis;
+};
+
+struct PhotonHash
+{
+	Photon* pointer;
+	int hashValue;
+
+	bool operator < (const PhotonHash& a)
+	{
+		return hashValue < a.hashValue;
+	}
 };
 
 struct PhotonPrd
@@ -45,6 +55,12 @@ struct PhotonPrd
 	int startIdx;
 	int numDeposits;	// number of times being recorded
 	int depth;			// number of reflection
+};
+
+struct DebugData
+{
+	float3 position;
+	int hashValue;
 };
 
 // data passed to Rt_RayGen
@@ -59,6 +75,9 @@ struct Rt_HitData
 	float3* kds;
 	LightSource* lightSource;
 	Photon* photonMap; 
+	int* NOLT;	// neighbour offset lookup table
+	int* photonMapStartIdxs;
+	DebugData* debugDatas;
 };
 
 #define PT_PHOTON_CNT 640000
@@ -85,6 +104,8 @@ struct Parameters
 	TransInfo* trans;
 	uint2 size;
 	curandState* randState;
+	float3 gridOrigin;
+	int3 gridSize;
 };
 
 // used in KNN photon search
@@ -95,19 +116,9 @@ struct HeapPhoton
 	float3 kd;
 	float3 dir;
 };
- 
-struct DebugData
-{
-	// nothing here
-};
 
 #define COLLECT_RAIDUS 0.005f
 
-// macro used in Kd-Tree building
-#define PPM_X ( 1 << 0 )
-#define PPM_Y ( 1 << 1 )
-#define PPM_Z ( 1 << 2 )
-#define PPM_LEAF ( 1 << 3 )
-#define PPM_NULL ( 1 << 4 )
-#define PPM_INSHADOW ( 1 << 5 )
-#define PPM_OVERFLOW ( 1 << 6 )
+#define hash(position) ((int)floorf((position.z - paras.gridOrigin.z) / COLLECT_RAIDUS)) * paras.gridSize.x * paras.gridSize.y \
++ ((int)floorf((position.y - paras.gridOrigin.y) / COLLECT_RAIDUS)) * paras.gridSize.x \
++ ((int)floorf((position.x - paras.gridOrigin.x) / COLLECT_RAIDUS))

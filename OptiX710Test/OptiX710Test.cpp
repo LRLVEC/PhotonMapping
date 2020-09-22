@@ -11,59 +11,6 @@
 
 void initRandom(curandState* state, int seed, unsigned int block, unsigned int grid, unsigned int MaxNum);
 
-#define ElemIndex(rec, index) ( (&(rec->position.x))[index] )
-
-template<class Elem> __inline void swap(Elem* list, int index1, int index2)
-{
-	Elem temp = list[index1];
-	list[index1] = list[index2];
-	list[index2] = temp;
-}
-
-template<class Elem> int partition(Elem* list, int axis, int left, int right, int pivotIndex)
-{
-	Elem pivotValue = list[pivotIndex];
-	swap(list, right, pivotIndex);
-	pivotIndex = right;
-	left--;
-	while (true)
-	{
-		do { left++; } while (left < right && ElemIndex(list[left], axis) < ElemIndex(pivotValue, axis));
-		do { right--; } while (left < right && ElemIndex(list[right], axis) > ElemIndex(pivotValue, axis));
-		if (left < right)
-			swap(list, left, right);
-		else {
-			// Put the pivotValue back in place
-			swap(list, left, pivotIndex);
-			return left;
-		}
-	}
-}
-
-// find the k-th largest Elem in list, k start from 0
-template<class Elem> Elem select(Elem* list, int axis, int left, int right, int k)
-{
-	while (true)
-	{
-		// select a value to pivot around between left and right and store the index to it.
-		int pivotIndex = (left + right) / 2;
-		// Determine where this value ended up.
-		int pivotNewIndex = partition<Elem>(list, axis, left, right, pivotIndex);
-		if (k == pivotNewIndex) {
-			// We found the kth value
-			return list[k];
-		}
-		else if (k < pivotNewIndex)
-			// if instead we found the k+Nth value, remove the segment of the list
-			// from pivotNewIndex onward from the search.
-			right = pivotNewIndex - 1;
-		else
-			// We found the k-Nth value, remove the segment of the list from
-			// pivotNewIndex and below from the search.
-			left = pivotNewIndex + 1;
-	}
-}
-
 namespace CUDA
 {
 	namespace OptiX
@@ -114,6 +61,8 @@ namespace CUDA
 			Buffer vertices;
 			Buffer normals;
 			Buffer kds;
+			Buffer NOLT;
+			Buffer photonMapStartIdxs;
 			Buffer debugDatas;
 			OptixBuildInput triangleBuildInput;
 			OptixAccelBuildOptions accelOptions;
@@ -169,6 +118,8 @@ namespace CUDA
 				vertices(Buffer::Device),
 				normals(Buffer::Device),
 				kds(Buffer::Device),
+				NOLT(Buffer::Device),
+				photonMapStartIdxs(Buffer::Device),
 				debugDatas(Buffer::Device),
 				triangleBuildInput({}),
 				accelOptions({}),
@@ -274,7 +225,14 @@ namespace CUDA
 					direct_callable_stack_size_from_state,
 					continuation_stack_size, 3);*/
 
-				// ray trace stage
+				// debug data
+				// NOTE: resize unfinished!
+				int debugDatasCnt = _size.w * _size.h;
+				DebugData* debugDatasTemp = new DebugData[debugDatasCnt];
+				debugDatas.copy(debugDatasTemp, sizeof(DebugData) * debugDatasCnt);
+				delete[] debugDatasTemp;
+
+				// ray trace pass
 				optixSbtRecordPackHeader(rt_raygen, &rt_raygenData);
 				rt_raygenDataBuffer.copy(rt_raygenData);
 
@@ -282,10 +240,12 @@ namespace CUDA
 				rt_hitDatas[RayRadiance].data.normals = (float3*)normals.device;
 				rt_hitDatas[RayRadiance].data.kds = (float3*)kds.device;
 				rt_hitDatas[RayRadiance].data.lightSource = (LightSource*)lightSourceBuffer.device;
+				//rt_hitDatas[RayRadiance].data.debugDatas = (DebugData*)debugDatas.device;
 				optixSbtRecordPackHeader(rt_hitShadowRay, &rt_hitDatas[ShadowRay]);
 				rt_hitDatas[ShadowRay].data.normals = (float3*)normals.device;
 				rt_hitDatas[ShadowRay].data.kds = (float3*)kds.device;
 				rt_hitDatas[ShadowRay].data.lightSource = (LightSource*)lightSourceBuffer.device;
+				//rt_hitDatas[ShadowRay].data.debugDatas = (DebugData*)debugDatas.device;
 				rt_hitDataBuffer.copy(rt_hitDatas, sizeof(rt_hitDatas));
 
 				SbtRecord<int> rt_missDatas[RayCount];
@@ -301,10 +261,8 @@ namespace CUDA
 				rt_sbt.hitgroupRecordStrideInBytes = sizeof(SbtRecord<Rt_HitData>);
 				rt_sbt.hitgroupRecordCount = RayCount;
 
-				// photon trace stage
-				// NOTE: photonMapBuffer should be larger in case of overflow due to the kdTree access
+				// photon trace pass
 				photonBuffer.resize(sizeof(Photon)* PT_MAX_DEPOSIT* PT_PHOTON_CNT);
-				photonMapBuffer.resize(sizeof(Photon)* PT_MAX_DEPOSIT * 2 * PT_PHOTON_CNT);
 
 				srand(time(nullptr));
 				cudaMalloc(&paras.randState, PT_PHOTON_CNT * sizeof(curandState));
@@ -333,13 +291,6 @@ namespace CUDA
 				pt_sbt.hitgroupRecordStrideInBytes = sizeof(SbtRecord<Pt_HitData>);
 				pt_sbt.hitgroupRecordCount = 1;
 
-				//// debug data
-				//// NOTE: resize unfinished!
-				//int debugDatasCnt = _size.w * _size.h;
-				//DebugData* debugDatasTemp = new DebugData[debugDatasCnt];
-				//debugDatas.copy(debugDatasTemp, sizeof(DebugData)* debugDatasCnt);
-				//delete[] debugDatasTemp;
-
 				cudaStreamCreate(&cuStream);
 			}
 			virtual void run()
@@ -352,10 +303,10 @@ namespace CUDA
 					photonFlag = false;
 				}
 				optixLaunch(rt_pip, cuStream, parasBuffer, sizeof(Parameters), &rt_sbt, paras.size.x, paras.size.y, 1);
-				//Gt_debug();
+				//Debug();
 				frameBuffer.unmap();
 			}
-			void Gt_debug()
+			void Debug()
 			{
 				debugDatas.map();
 				
@@ -363,6 +314,9 @@ namespace CUDA
 				int debugDatasCnt = debugDatasSize / sizeof(DebugData);
 				DebugData* debugDatasTemp = new DebugData[debugDatasCnt];
 				cudaMemcpy(debugDatasTemp, debugDatas.device, debugDatasSize, cudaMemcpyDeviceToHost);
+
+				for (int i = 0; i < 1; i++)
+					printf("(%f,%f,%f) -> %d should be %d\n", debugDatasTemp[i].position.x, debugDatasTemp[i].position.y, debugDatasTemp[i].position.z,debugDatasTemp[i].hashValue,hash(debugDatasTemp[i].position));
 
 				delete[] debugDatasTemp;
 
@@ -381,101 +335,10 @@ namespace CUDA
 			{
 				cudaFree(paras.randState);
 			}
-			void buildKdTree(Photon** photons, int start, int end, int depth, Photon* kdTree,
-				int root, float3 bbmin, float3 bbmax)
-			{
-				if (end == start)	// 0 photon -> Null node
-				{
-					kdTree[root].axis = PPM_NULL;
-					kdTree[root].energy = make_float3(0.0f, 0.0f, 0.0f);
-					return;
-				}
-
-				if (end - start == 1)	// 1 photon -> leaf
-				{
-					photons[start]->axis = PPM_LEAF;
-					kdTree[root] = *(photons[start]);
-					return;
-				}
-
-				// choose the split axis
-				int axis;
-				float3 diag = make_float3(bbmax.x - bbmin.x, bbmax.y - bbmin.y, bbmax.z - bbmin.z);
-
-				if (diag.x > diag.y)
-				{
-					if (diag.x > diag.z)
-						axis = 0;
-					else
-						axis = 2;
-				}
-				else
-				{
-					if (diag.y > diag.z)
-						axis = 1;
-					else
-						axis = 2;
-				}
-
-				// choose the root photon
-				int median = (start + end) / 2;
-				Photon** startAddr = &photons[start];
-
-				switch (axis)
-				{
-					case 0:
-						select(startAddr, 0, 0, end - start - 1, median - start);
-						photons[median]->axis = PPM_X;
-						break;
-					case 1:
-						select(startAddr, 1, 0, end - start - 1, median - start);
-						photons[median]->axis = PPM_Y;
-						break;
-					case 2:
-						select(startAddr, 2, 0, end - start - 1, median - start);
-						photons[median]->axis = PPM_Z;
-						break;
-				}
-
-				// calculate the bounding box
-				float3 rightMin = bbmin;
-				float3 leftMax = bbmax;
-				float3 midPointPosition = (*photons[median]).position;
-				switch (axis)
-				{
-					case 0:
-						rightMin.x = midPointPosition.x;
-						leftMax.x = midPointPosition.x;
-						break;
-					case 1:
-						rightMin.y = midPointPosition.y;
-						leftMax.y = midPointPosition.y;
-						break;
-					case 2:
-						rightMin.z = midPointPosition.z;
-						leftMax.z = midPointPosition.z;
-						break;
-				}
-
-				// recursively build the KdTree
-				kdTree[root] = *(photons[median]);
-				buildKdTree(photons, start, median, depth + 1, kdTree, 2 * root + 1, bbmin, leftMax);
-				buildKdTree(photons, median + 1, end, depth + 1, kdTree, 2 * root + 2, rightMin, bbmax);
-			}
 			void createPhotonMap()
 			{
 				photonBuffer.map();
 				photonMapBuffer.map();
-
-				// initialize the photon map
-				size_t photonMapBufferSize = photonMapBuffer.size;
-				int photonMapBufferCnt = photonMapBufferSize / sizeof(Photon);
-				Photon* photonMapData = new Photon[photonMapBufferCnt];
-				for (int c0(0); c0 < photonMapBufferCnt; c0++)
-				{
-					photonMapData[c0].energy = { 0.0f,0.0f,0.0f };
-					photonMapData[c0].axis = 0;
-				}
 
 				// copy photon data to host
 				size_t photonBufferSize = photonBuffer.size;
@@ -483,63 +346,128 @@ namespace CUDA
 				Photon* photonData = new Photon[photonBufferCnt];
 				cudaMemcpy(photonData, photonBuffer.device, photonBufferSize, cudaMemcpyDeviceToHost);
 
-				// get valid data
+				// get valid data and compute bounding box
+				float floatMax = std::numeric_limits<float>::max();
+				float3 bbmin = make_float3(floatMax, floatMax, floatMax);
+				float3 bbmax = make_float3(-floatMax, -floatMax, -floatMax);
+
 				int validPhotonCnt = 0;
-				Photon** tempPhotons = new Photon* [photonBufferCnt];
+				PhotonHash* tempPhotons = new PhotonHash[photonBufferCnt];
 				for (int c0(0); c0 < photonBufferCnt; c0++)
 					if (photonData[c0].energy.x > 0.0f ||
 						photonData[c0].energy.y > 0.0f ||
 						photonData[c0].energy.z > 0.0f)
 					{
-						tempPhotons[validPhotonCnt++] = &photonData[c0];
-						/*
-						printf("photon #%d: position  (%f,%f,%f)\n", c0, photonData[c0].position.x, photonData[c0].position.y, photonData[c0].position.z);
-						printf("           direction (%f,%f,%f)\n", photonData[c0].dir.x, photonData[c0].dir.y, photonData[c0].dir.z);
-						printf("           normal    (%f,%f,%f)\n", photonData[c0].normal.x, photonData[c0].normal.y, photonData[c0].normal.z);
-						printf("           energy    (%f,%f,%f)\n", photonData[c0].energy.x, photonData[c0].energy.y, photonData[c0].energy.z);
-						*/
-					}
+						float3 position = photonData[c0].position;
 
+						tempPhotons[validPhotonCnt++].pointer = &photonData[c0];
+
+						bbmin.x = fminf(bbmin.x, position.x);
+						bbmin.y = fminf(bbmin.y, position.y);
+						bbmin.z = fminf(bbmin.z, position.z);
+						bbmax.x = fmaxf(bbmax.x, position.x);
+						bbmax.y = fmaxf(bbmax.y, position.y);
+						bbmax.z = fmaxf(bbmax.z, position.z);
+					}
 
 				printf("photonBufferCnt: %d, valid cnt: %d\n", photonBufferCnt, validPhotonCnt);
 
-				if (validPhotonCnt > photonMapBufferCnt)
-					validPhotonCnt = photonMapBufferCnt;
+				bbmin.x -= 0.001f;
+				bbmin.y -= 0.001f;
+				bbmin.z -= 0.001f;
+				bbmax.x += 0.001f;
+				bbmax.y += 0.001f;
+				bbmax.z += 0.001f;
 
-				// compute the bounding box
-				float floatMax = std::numeric_limits<float>::max();
-				float3 bbmin = make_float3(floatMax, floatMax, floatMax);
-				float3 bbmax = make_float3(-floatMax, -floatMax, -floatMax);
+				/*printf("bbmin:(%f,%f,%f)\n", bbmin.x, bbmin.y, bbmin.z);
+				printf("bbmax:(%f,%f,%f)\n", bbmax.x, bbmax.y, bbmax.z);*/
+
+				// specify the grid size
+				paras.gridSize.x = (int)ceilf((bbmax.x - bbmin.x) / COLLECT_RAIDUS) + 2;
+				paras.gridSize.y = (int)ceilf((bbmax.y - bbmin.y) / COLLECT_RAIDUS) + 2;
+				paras.gridSize.z = (int)ceilf((bbmax.z - bbmin.z) / COLLECT_RAIDUS) + 2;
+				/*printf("gridSize:(%d,%d,%d)\n", paras.gridSize.x, paras.gridSize.y, paras.gridSize.z);*/
+
+				// specify the world origin
+				paras.gridOrigin.x = bbmin.x - COLLECT_RAIDUS;
+				paras.gridOrigin.y = bbmin.y - COLLECT_RAIDUS;
+				paras.gridOrigin.z = bbmin.z - COLLECT_RAIDUS;
+				printf("gridOrigin:(%f,%f,%f)\n", paras.gridOrigin.x, paras.gridOrigin.y, paras.gridOrigin.z);
+
+				parasBuffer.copy(paras);
+
+				// compute hash value
 				for (int c0(0); c0 < validPhotonCnt; c0++)
+					tempPhotons[c0].hashValue = hash(tempPhotons[c0].pointer->position);
+
+				// sort according to hash value
+				qsort(tempPhotons, 0, validPhotonCnt);
+
+				for (int i = 0; i < validPhotonCnt; i++)
+					Photon& photon = *tempPhotons[i].pointer;
+
+				// create neighbour offset lookup table
+				int* NOLTDatas = new int[27];
+				int neighbourIdx = 0;
+				for(int c0(-1); c0 <= 1; c0++)
+					for(int c1(-1); c1 <= 1; c1++)
+						for (int c2(-1); c2 <= 1; c2++)
+						{
+							NOLTDatas[neighbourIdx] = c0 * paras.gridSize.x * paras.gridSize.y + c1 * paras.gridSize.x + c2;
+							neighbourIdx++;
+						}
+				NOLT.copy(NOLTDatas, sizeof(int) * 27);
+				delete[] NOLTDatas;
+
+				// reorder to build the photonMap
+				Photon* photonMapData = new Photon[validPhotonCnt];
+				for (int c0(0); c0 < validPhotonCnt; c0++)
+					photonMapData[c0] = *(tempPhotons[c0].pointer);
+				photonMapBuffer.copy(photonMapData, sizeof(Photon) * validPhotonCnt);
+
+				// find the start index for each cell
+				int gridCnt = paras.gridSize.x * paras.gridSize.y * paras.gridSize.z;
+				int* startIdxs = new int[gridCnt + 1];
+				int i = 0;	// for startIdxs
+				int j = 0;	// for tempPhotons
+				while (i <= gridCnt)
 				{
-					float3 position = (*tempPhotons[c0]).position;
-					bbmin.x = fminf(bbmin.x, position.x);
-					bbmin.y = fminf(bbmin.y, position.y);
-					bbmin.z = fminf(bbmin.z, position.z);
-					bbmax.x = fmaxf(bbmax.x, position.x);
-					bbmax.y = fmaxf(bbmax.y, position.y);
-					bbmax.z = fmaxf(bbmax.z, position.z);
+					if (i < tempPhotons[j].hashValue)
+					{
+						startIdxs[i++] = j;
+						continue;
+					}
+					if (i == tempPhotons[j].hashValue)
+					{
+						startIdxs[i] = j;
+						while (i == tempPhotons[j].hashValue && j < validPhotonCnt)
+							j++;
+						i++;
+					}
+					if (j == validPhotonCnt)
+					{
+						while (i <= gridCnt)
+							startIdxs[i++] = j;
+					}
 				}
+				photonMapStartIdxs.copy(startIdxs, sizeof(int)* (gridCnt + 1));
 
-				//printf("bbmin:(%f,%f,%f)\n", bbmin.x, bbmin.y, bbmin.z);
-				//printf("bbmax:(%f,%f,%f)\n", bbmax.x, bbmax.y, bbmax.z);
+				/*int emptyCnt = 0;
+				for (int i = 0; i < gridCnt; i++)
+					if (startIdxs[i] == startIdxs[i + 1])
+						emptyCnt++;
+				printf("empty %f\%\n", (float)emptyCnt / gridCnt);*/
 
-				// build the kdTree
-				buildKdTree(tempPhotons, 0, validPhotonCnt, 0, photonMapData, 0, bbmin, bbmax);
-
-				/*for (int i = 0; i < photonMapBufferCnt; i++)
-				{
-					printf("photonMap[%d].position(%f,%f,%f)\n", i, photonMapData[i].position.x, photonMapData[i].position.y, photonMapData[i].position.z);
-					printf("             axis %d\n", photonMapData[i].axis);
-				}*/
-
-				// copy result to device
-				photonMapBuffer.copy(photonMapData, photonMapBufferSize);
+				delete[] startIdxs;
 
 				// update the sbt
 				rt_hitDataBuffer.map();
 				rt_hitDatas[RayRadiance].data.photonMap = (Photon*)photonMapBuffer.device;
 				rt_hitDatas[ShadowRay].data.photonMap = (Photon*)photonMapBuffer.device;
+				rt_hitDatas[RayRadiance].data.photonMapStartIdxs = (int*)photonMapStartIdxs.device;
+				rt_hitDatas[ShadowRay].data.photonMapStartIdxs = (int*)photonMapStartIdxs.device;
+				rt_hitDatas[RayRadiance].data.NOLT = (int*)NOLT.device;
+				rt_hitDatas[ShadowRay].data.NOLT = (int*)NOLT.device;
 				rt_hitDataBuffer.copy(rt_hitDatas, sizeof(rt_hitDatas));
 				rt_hitDataBuffer.unmap();
 

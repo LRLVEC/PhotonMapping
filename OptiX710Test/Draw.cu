@@ -101,8 +101,6 @@ struct PhotonMaxHeap
 	}
 };
 
-#define MAX_DEPTH 20	// one million photons
-
 
 extern "C" __global__ void __raygen__RayAllocator()
 {
@@ -141,55 +139,35 @@ extern "C" __global__ void __closesthit__RayRadiance()
 	if (fmaxf(hitPointKd) > 0.0f)
 	{
 		Photon* photonMap = hitData->photonMap;
+		int* photonMapStartIdxs = hitData->photonMapStartIdxs;
+		int* NOLT = hitData->NOLT;
 
 		float radius2 = COLLECT_RAIDUS * COLLECT_RAIDUS;
 
-		int stack[MAX_DEPTH];
-		int stackTop = 0;
-		int node = 0;
-
-#define push_node(N) stack[stackTop++] = (N)
-#define pop_node() stack[--stackTop]
+		int hitPointHashValue = hash(hitPointPosition);
 
 		PhotonMaxHeap heap;
 		heap.currentSize = 0;
 		heap.cameraRayDir = rayDir;
 		heap.hitPointNormal = hitPointNormal;
 
-		push_node(0);
-		do
+		for (int c0(0); c0 < 27; c0++)
 		{
-			Photon& photon = photonMap[node];
-			if (!(photon.axis & PPM_NULL))
+			int gridNumber = hitPointHashValue + NOLT[c0];
+			int startIdx = photonMapStartIdxs[gridNumber];
+			int endIdx = photonMapStartIdxs[gridNumber + 1];
+			for (int c1(startIdx); c1 < endIdx; c1++)
 			{
+				Photon& photon = photonMap[c1];
 				float3 diff = hitPointPosition - photon.position;
 				float distance2 = dot(diff, diff);
 
 				if (distance2 <= radius2)
 					heap.push(distance2, photon.energy, hitPointKd, photon.dir);
-
-				if (!(photon.axis & PPM_LEAF))
-				{
-					float d;
-					if (photon.axis & PPM_X)
-						d = diff.x;
-					else if (photon.axis & PPM_Y)
-						d = diff.y;
-					else
-						d = diff.z;
-
-					int selector = d < 0.0f ? 0 : 1;
-					if (d * d < radius2)
-						push_node(2 * node + 2 - selector);
-
-					node = 2 * node + 1 + selector;
-				}
-				else
-					node = pop_node();
 			}
-			else
-				node = pop_node();
-		} while (node);
+		}
+
+		//DebugData& debug = hitData->debugDatas[index.y * paras.size.x + index.x];
 
 		// indirect flux
 		float3 indirectFlux = heap.accumulate(radius2);
@@ -225,8 +203,8 @@ extern "C" __global__ void __closesthit__RayRadiance()
 			directFlux = lightSource->power * attenuation * hitPointKd * cosDN;
 		}
 
-		float3 color = 0.1f * directFlux;
-		//float3 color = indirectFlux;
+		//float3 color = 0.1f * directFlux;
+		float3 color = indirectFlux;
 
 		paras.image[index.y * paras.size.x + index.x] = make_float4(color, 1.0f);
 	}
@@ -275,13 +253,12 @@ extern "C" __global__ void __raygen__PhotonEmit()
 	curandStateMini state;
 	getCurandState(&state, statePtr);
 
-	float3 position = make_float3(0.0f);
-
 	Pt_RayGenData* raygenData = (Pt_RayGenData*)optixGetSbtDataPointer();
 	LightSource* lightSource = raygenData->lightSource;	
 
 	// cos sampling(should be uniformly sampling a sphere)
 	float3 dir = randomDirectionCosN(normalize(lightSource->direction), 1.0f, &state);
+	float3 position = lightSource->position;
 
 	/*float2 seed = curand_uniform2(&state);
 	float z = 1 - 2 * seed.x;
