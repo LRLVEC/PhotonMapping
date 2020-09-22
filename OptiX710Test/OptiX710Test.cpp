@@ -392,8 +392,8 @@ namespace CUDA
 				paras.gridOrigin.x = bbmin.x - COLLECT_RAIDUS;
 				paras.gridOrigin.y = bbmin.y - COLLECT_RAIDUS;
 				paras.gridOrigin.z = bbmin.z - COLLECT_RAIDUS;
-				printf("gridOrigin:(%f,%f,%f)\n", paras.gridOrigin.x, paras.gridOrigin.y, paras.gridOrigin.z);
-
+				/*printf("gridOrigin:(%f,%f,%f)\n", paras.gridOrigin.x, paras.gridOrigin.y, paras.gridOrigin.z);
+*/
 				parasBuffer.copy(paras);
 
 				// compute hash value
@@ -403,19 +403,15 @@ namespace CUDA
 				// sort according to hash value
 				qsort(tempPhotons, 0, validPhotonCnt);
 
-				for (int i = 0; i < validPhotonCnt; i++)
-					Photon& photon = *tempPhotons[i].pointer;
-
 				// create neighbour offset lookup table
 				int* NOLTDatas = new int[27];
-				int neighbourIdx = 0;
-				for(int c0(-1); c0 <= 1; c0++)
-					for(int c1(-1); c1 <= 1; c1++)
-						for (int c2(-1); c2 <= 1; c2++)
-						{
-							NOLTDatas[neighbourIdx] = c0 * paras.gridSize.x * paras.gridSize.y + c1 * paras.gridSize.x + c2;
-							neighbourIdx++;
-						}
+				float3 offset[27] = 
+				{	{0,0,0},{-1,0,0},{1,0,0},{0,-1,0},{0,1,0},{0,0,-1},{0,0,1},
+					{-1,-1,0},{-1,1,0},{1,-1,0},{1,1,0},{0,-1,-1},{0,-1,1},{0,1,-1},
+					{0,1,1},{-1,0,-1},{-1,0,1},{1,0,-1},{1,0,1},{-1,-1,-1},{-1,-1,1},
+					{-1,1,-1},{-1,1,1},{1,-1,-1},{1,-1,1},{1,1,-1},{1,1,1} };
+				for(int c0(0); c0 < 27; c0++)					
+					NOLTDatas[c0] = offset[c0].z * paras.gridSize.x * paras.gridSize.y + offset[c0].y * paras.gridSize.x + offset[c0].x;
 				NOLT.copy(NOLTDatas, sizeof(int) * 27);
 				delete[] NOLTDatas;
 

@@ -13,7 +13,6 @@ struct PhotonMaxHeap
 	int currentSize;
 	HeapPhoton photons[PHOTONHEAP_SIZE];
 	float3 cameraRayDir;
-	float3 hitPointNormal;
 
 #define PARENT(x) ((x - 1) >> 1)
 	__device__ __inline__ void siftUp(int position)
@@ -48,14 +47,12 @@ struct PhotonMaxHeap
 		photons[i] = temp;
 	}
 
-	__device__ __inline__ void push(const float& distance2, const float3& flux, const float3& kd, const float3& dir)
+	__device__ __inline__ void push(const float& distance2, const int& index)
 	{
 		if (currentSize < PHOTONHEAP_SIZE)
 		{
 			photons[currentSize].distance2 = distance2;
-			photons[currentSize].flux = flux;
-			photons[currentSize].kd = kd;
-			photons[currentSize].dir = dir;
+			photons[currentSize].index = index;
 			siftUp(currentSize);
 			currentSize++;
 			return;
@@ -63,9 +60,7 @@ struct PhotonMaxHeap
 		else if (photons[0].distance2 > distance2)
 		{
 			photons[0].distance2 = distance2;
-			photons[0].flux = flux;
-			photons[0].kd = kd;
-			photons[0].dir = dir;
+			photons[0].index = index;
 			siftDown(0);
 		}
 	}
@@ -74,14 +69,13 @@ struct PhotonMaxHeap
 
 	__device__ __inline__ float3 accumulate(float& radius2)
 	{
-		/*uint2 index = make_uint2(optixGetLaunchIndex());
-		Gt_RayGenData* raygenData = (Gt_RayGenData*)optixGetSbtDataPointer();
-		DebugData& debugData = raygenData->debugDatas[index.y * paras.size.x + index.x];*/
+		Rt_HitData* hitData = (Rt_HitData*)optixGetSbtDataPointer();
+		float3* kds = hitData->kds;
+		float3* normals = hitData->normals;
+		Photon* photonMap = hitData->photonMap;
 
 		float3 flux = make_float3(0.0f, 0.0f, 0.0f);
 		float Wpc = 0.0f;	// weight of cone filter
-		// from which side came the camera ray
-		float sideFlag = dot(cameraRayDir, hitPointNormal);
 
 		if (currentSize > 0)
 			radius2 = fmaxf(photons[0].distance2, COLLECT_RAIDUS * COLLECT_RAIDUS);
@@ -89,10 +83,12 @@ struct PhotonMaxHeap
 
 		for (int c0(0); c0 < currentSize; c0++)
 		{
-			if (dot(photons[c0].dir, hitPointNormal) * sideFlag <= 0)
+			const Photon& photon = photonMap[photons[c0].index];
+			float3 hitPointNormal = normals[photon.primIdx];
+			if (dot(photon.dir, hitPointNormal) * dot(cameraRayDir, hitPointNormal) <= 0)
 				continue;
 			Wpc = 1.0f - sqrtf(photons[c0].distance2) / (filter_k * radius);
-			flux += photons[c0].flux * photons[c0].kd * Wpc;
+			flux += photon.energy * kds[photon.primIdx] * Wpc;
 		}
 
 		flux = flux / (M_PIf * radius2) / (1 - 0.6667f / filter_k) / PT_PHOTON_CNT;
@@ -149,7 +145,6 @@ extern "C" __global__ void __closesthit__RayRadiance()
 		PhotonMaxHeap heap;
 		heap.currentSize = 0;
 		heap.cameraRayDir = rayDir;
-		heap.hitPointNormal = hitPointNormal;
 
 		for (int c0(0); c0 < 27; c0++)
 		{
@@ -158,12 +153,12 @@ extern "C" __global__ void __closesthit__RayRadiance()
 			int endIdx = photonMapStartIdxs[gridNumber + 1];
 			for (int c1(startIdx); c1 < endIdx; c1++)
 			{
-				Photon& photon = photonMap[c1];
-				float3 diff = hitPointPosition - photon.position;
+				Photon* photon = photonMap + c1;
+				float3 diff = hitPointPosition - photon->position;
 				float distance2 = dot(diff, diff);
 
 				if (distance2 <= radius2)
-					heap.push(distance2, photon.energy, hitPointKd, photon.dir);
+					heap.push(distance2, c1);
 			}
 		}
 
@@ -326,9 +321,9 @@ extern "C" __global__ void __closesthit__PhotonHit()
 		{
 			Photon& photon = hitData->photons[prd.startIdx + prd.numDeposits];
 			photon.position = hitPointPosition;
-			photon.normal = hitPointNormal;
 			photon.dir = oldDir;
 			photon.energy = prd.energy;
+			photon.primIdx = primIdx;
 			prd.numDeposits++;
 		}
 

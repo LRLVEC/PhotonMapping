@@ -33,9 +33,9 @@ struct LightSource
 struct Photon
 {
 	float3 position;
-	float3 normal;
 	float3 dir;
 	float3 energy;
+	int primIdx;
 };
 
 struct PhotonHash
@@ -77,7 +77,7 @@ struct Rt_HitData
 	Photon* photonMap; 
 	int* NOLT;	// neighbour offset lookup table
 	int* photonMapStartIdxs;
-	DebugData* debugDatas;
+	//DebugData* debugDatas;
 };
 
 #define PT_PHOTON_CNT 640000
@@ -112,9 +112,7 @@ struct Parameters
 struct HeapPhoton
 {
 	float distance2;
-	float3 flux;
-	float3 kd;
-	float3 dir;
+	int index;
 };
 
 #define COLLECT_RAIDUS 0.005f
