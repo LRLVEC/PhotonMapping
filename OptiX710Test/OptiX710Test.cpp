@@ -74,12 +74,12 @@ namespace CUDA
 				context(),
 				rt_moduleCompileOptions{
 					OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-					OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
-					OPTIX_COMPILE_DEBUG_LEVEL_FULL },
+					OPTIX_COMPILE_OPTIMIZATION_LEVEL_3,
+					OPTIX_COMPILE_DEBUG_LEVEL_NONE },
 				pt_moduleCompileOptions{
 					OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-					OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
-					OPTIX_COMPILE_DEBUG_LEVEL_FULL },
+					OPTIX_COMPILE_OPTIMIZATION_LEVEL_3,
+					OPTIX_COMPILE_DEBUG_LEVEL_NONE },
 				rt_pipelineCompileOptions{ false,
 					OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
 					8,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },//OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE: new in OptiX7.1.0
@@ -97,8 +97,8 @@ namespace CUDA
 				rt_missShadowRay(Vector<String<char>>("__miss__ShadowRay"), Program::Miss, &rt_programGroupOptions, context, &mm),
 				pt_raygen(Vector<String<char>>("__raygen__PhotonEmit"), Program::RayGen, &pt_programGroupOptions, context, &mm),
 				pt_closestHit(Vector<String<char>>("__closesthit__PhotonHit"), Program::HitGroup, &pt_programGroupOptions, context, &mm),
-				rt_pipelineLinkOptions{ 1,OPTIX_COMPILE_DEBUG_LEVEL_FULL },//no overrideUsesMotionBlur in OptiX7.1.0
-				pt_pipelineLinkOptions{ 10,OPTIX_COMPILE_DEBUG_LEVEL_FULL }, // NOTE: maxDepth = 10 in photon trace stage
+				rt_pipelineLinkOptions{ 1,OPTIX_COMPILE_DEBUG_LEVEL_NONE },//no overrideUsesMotionBlur in OptiX7.1.0
+				pt_pipelineLinkOptions{ 10,OPTIX_COMPILE_DEBUG_LEVEL_NONE }, // NOTE: maxDepth = 10 in photon trace stage
 				rt_pip(context, &rt_pipelineCompileOptions, &rt_pipelineLinkOptions, { rt_raygen ,rt_hitRayRadiance, rt_hitShadowRay, rt_missRayRadiance, rt_missShadowRay }),
 				pt_pip(context, &pt_pipelineCompileOptions, &pt_pipelineLinkOptions, { pt_raygen ,pt_closestHit, pt_miss }),
 				lightSourceBuffer(lightSource, false),
@@ -605,7 +605,7 @@ int main()
 	Window::WindowManager wm(winPara);
 	OpenGL::PathTracing pathTracer(winPara.size.size);
 	wm.init(0, &pathTracer);
-	glfwSwapInterval(0);
+	glfwSwapInterval(1);
 	FPS fps;
 	fps.refresh();
 	while (!wm.close())
