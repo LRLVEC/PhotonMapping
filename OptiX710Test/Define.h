@@ -15,6 +15,7 @@ using TransInfo = CUDA::OptiX::Trans::TransInfo;
 enum RayType
 {
 	RayRadiance = 0,
+	ShadowRay = 1,
 	RayCount
 };
 struct RayData
@@ -24,30 +25,28 @@ struct RayData
 
 struct LightSource
 {
-	enum LightType { SPOT, SQUARE }type;
 	float3 position;
 	float3 power;
-	// square lightsource
-	float3 edge1;
-	float3 edge2;
 	float3 direction;
-};
-
-// information of the hit point of the camera ray
-struct CameraRayHitData
-{
-	float3 position;	// position of the hit point
-	float3 rayDir;		// direction of the camera ray
-	int primIdx;		// index of the hit primitive, -1 if miss
 };
 
 struct Photon
 {
 	float3 position;
-	float3 normal;
 	float3 dir;
 	float3 energy;
-	int axis;
+	int primIdx;
+};
+
+struct PhotonHash
+{
+	Photon* pointer;
+	int hashValue;
+
+	bool operator < (const PhotonHash& a)
+	{
+		return hashValue < a.hashValue;
+	}
 };
 
 struct PhotonPrd
@@ -58,17 +57,27 @@ struct PhotonPrd
 	int depth;			// number of reflection
 };
 
+struct DebugData
+{
+	float3 position;
+	int hashValue;
+};
+
 // data passed to Rt_RayGen
 struct Rt_RayGenData
 {
-	CameraRayHitData* cameraRayHitDatas;	// to store the information of hit point
+	
 };
 
-struct Rt_CloseHitData
+struct Rt_HitData
 {
 	float3* normals;
 	float3* kds;
-	CameraRayHitData* cameraRayHitDatas;
+	LightSource* lightSource;
+	Photon* photonMap; 
+	int* NOLT;	// neighbour offset lookup table
+	int* photonMapStartIdxs;
+	//DebugData* debugDatas;
 };
 
 #define PT_PHOTON_CNT 640000
@@ -81,7 +90,7 @@ struct Pt_RayGenData
 	Photon* photons;
 };
 
-struct Pt_CloseHitData
+struct Pt_HitData
 {
 	float3* normals;
 	float3* kds;
@@ -95,40 +104,19 @@ struct Parameters
 	TransInfo* trans;
 	uint2 size;
 	curandState* randState;
+	float3 gridOrigin;
+	int3 gridSize;
 };
 
 // used in KNN photon search
 struct HeapPhoton
 {
 	float distance2;
-	float3 flux;
-	float3 kd;
-	float3 dir;
-};
- 
-struct DebugData
-{
-	// nothing here
+	int index;
 };
 
 #define COLLECT_RAIDUS 0.005f
 
-struct Gt_RayGenData
-{
-	CameraRayHitData* cameraRayHitDatas;
-	Photon* photonMap;
-	float3* normals;
-	float3* kds;
-	LightSource* lightSource;
-	DebugData* debugDatas;
-};
-
-
-// macro used in Kd-Tree building
-#define PPM_X ( 1 << 0 )
-#define PPM_Y ( 1 << 1 )
-#define PPM_Z ( 1 << 2 )
-#define PPM_LEAF ( 1 << 3 )
-#define PPM_NULL ( 1 << 4 )
-#define PPM_INSHADOW ( 1 << 5 )
-#define PPM_OVERFLOW ( 1 << 6 )
+#define hash(position) ((int)floorf((position.z - paras.gridOrigin.z) / COLLECT_RAIDUS)) * paras.gridSize.x * paras.gridSize.y \
++ ((int)floorf((position.y - paras.gridOrigin.y) / COLLECT_RAIDUS)) * paras.gridSize.x \
++ ((int)floorf((position.x - paras.gridOrigin.x) / COLLECT_RAIDUS))
