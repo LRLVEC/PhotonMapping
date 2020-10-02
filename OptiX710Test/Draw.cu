@@ -7,100 +7,13 @@ extern "C"
 }
 
 
-struct PhotonMaxHeap
-{
-#define PHOTONHEAP_SIZE 31
-	int currentSize;
-	HeapPhoton photons[PHOTONHEAP_SIZE];
-	float3 cameraRayDir;
-
-#define PARENT(x) ((x - 1) >> 1)
-	__device__ __inline__ void siftUp(int position)
-	{
-		int tempPos = position;
-		HeapPhoton tempPhoton = photons[tempPos];
-		while (tempPos > 0 && photons[PARENT(tempPos)].distance2 < tempPhoton.distance2)
-		{
-			photons[tempPos] = photons[PARENT(tempPos)];
-			tempPos = PARENT(tempPos);
-		}
-		photons[tempPos] = tempPhoton;
-	}
-
-	__device__ __inline__ void siftDown(int position)
-	{
-		int i = position;
-		int j = 2 * i + 1;
-		HeapPhoton temp = photons[i];
-		while (j < currentSize)
-		{
-			if ((j < currentSize - 1) && photons[j].distance2 < photons[j + 1].distance2)
-				j++;
-			if (temp.distance2 < photons[j].distance2)
-			{
-				photons[i] = photons[j];
-				i = j;
-				j = 2 * j + 1;
-			}
-			else break;
-		}
-		photons[i] = temp;
-	}
-
-	__device__ __inline__ void push(const float& distance2, const int& index)
-	{
-		if (currentSize < PHOTONHEAP_SIZE)
-		{
-			photons[currentSize].distance2 = distance2;
-			photons[currentSize].index = index;
-			siftUp(currentSize);
-			currentSize++;
-			return;
-		}
-		else if (photons[0].distance2 > distance2)
-		{
-			photons[0].distance2 = distance2;
-			photons[0].index = index;
-			siftDown(0);
-		}
-	}
-
-#define filter_k 1.1
-
-	__device__ __inline__ float3 accumulate(float& radius2)
-	{
-		Rt_HitData* hitData = (Rt_HitData*)optixGetSbtDataPointer();
-		float3* kds = hitData->kds;
-		float3* normals = hitData->normals;
-		Photon* photonMap = hitData->photonMap;
-
-		float3 flux = make_float3(0.0f, 0.0f, 0.0f);
-		float Wpc = 0.0f;	// weight of cone filter
-
-		if (currentSize > 0)
-			radius2 = fmaxf(photons[0].distance2, COLLECT_RAIDUS * COLLECT_RAIDUS);
-		float radius = sqrtf(radius2);
-
-		for (int c0(0); c0 < currentSize; c0++)
-		{
-			const Photon& photon = photonMap[photons[c0].index];
-			float3 hitPointNormal = normals[photon.primIdx];
-			if (dot(photon.dir, hitPointNormal) * dot(cameraRayDir, hitPointNormal) <= 0)
-				continue;
-			Wpc = 1.0f - sqrtf(photons[c0].distance2) / (filter_k * radius);
-			flux += photon.energy * kds[photon.primIdx] * Wpc;
-		}
-
-		flux = flux / (M_PIf * radius2) / (1 - 0.6667f / filter_k) / PT_PHOTON_CNT;
-
-		return flux;
-	}
-};
-
-
 extern "C" __global__ void __raygen__RayAllocator()
 {
 	uint2 index = make_uint2(optixGetLaunchIndex());
+
+	Rt_RayGenData* raygenData = (Rt_RayGenData*)optixGetSbtDataPointer();
+	CameraRayData& cameraRayData = raygenData->cameraRayDatas[index.y * paras.size.x + index.x];
+	cameraRayData.primIdx = -1;
 
 	float2 ahh = random(index, paras.size, 0) +
 		make_float2(index) - make_float2(paras.size) / 2.0f;
@@ -134,43 +47,16 @@ extern "C" __global__ void __closesthit__RayRadiance()
 
 	if (fmaxf(hitPointKd) > 0.0f)
 	{
-		Photon* photonMap = hitData->photonMap;
-		int* photonMapStartIdxs = hitData->photonMapStartIdxs;
-		int* NOLT = hitData->NOLT;
-
-		float radius2 = COLLECT_RAIDUS * COLLECT_RAIDUS;
-
-		int hitPointHashValue = hash(hitPointPosition);
-
-		PhotonMaxHeap heap;
-		heap.currentSize = 0;
-		heap.cameraRayDir = rayDir;
-
-		for (int c0(0); c0 < 27; c0++)
-		{
-			int gridNumber = hitPointHashValue + NOLT[c0];
-			int startIdx = photonMapStartIdxs[gridNumber];
-			int endIdx = photonMapStartIdxs[gridNumber + 1];
-			for (int c1(startIdx); c1 < endIdx; c1++)
-			{
-				Photon* photon = photonMap + c1;
-				float3 diff = hitPointPosition - photon->position;
-				float distance2 = dot(diff, diff);
-
-				if (distance2 <= radius2)
-					heap.push(distance2, c1);
-			}
-		}
-
-		//DebugData& debug = hitData->debugDatas[index.y * paras.size.x + index.x];
-
-		// indirect flux
-		float3 indirectFlux = heap.accumulate(radius2);
+		// record cameraRay info
+		CameraRayData& cameraRayData = hitData->cameraRayDatas[index.y * paras.size.x + index.x];
+		cameraRayData.position = hitPointPosition;
+		cameraRayData.direction = rayDir;
+		cameraRayData.primIdx = primIdx;
 
 		// direct flux
 		float3 lightSourcePosition;
 		LightSource* lightSource = hitData->lightSource;
-		
+
 		lightSourcePosition = lightSource->position;
 
 		float3 shadowRayDir = lightSourcePosition - hitPointPosition;
@@ -198,8 +84,7 @@ extern "C" __global__ void __closesthit__RayRadiance()
 			directFlux = lightSource->power * attenuation * hitPointKd * cosDN;
 		}
 
-		//float3 color = 0.1f * directFlux;
-		float3 color = indirectFlux;
+		float3 color = 0.1f * directFlux;
 
 		paras.image[index.y * paras.size.x + index.x] = make_float4(color, 1.0f);
 	}
@@ -226,7 +111,7 @@ extern "C" __global__ void __miss__RayRadiance()
 
 extern "C" __global__ void __miss__ShadowRay()
 {
-	
+
 }
 
 // create a orthonormal basis from normalized vector n
@@ -249,7 +134,7 @@ extern "C" __global__ void __raygen__PhotonEmit()
 	getCurandState(&state, statePtr);
 
 	Pt_RayGenData* raygenData = (Pt_RayGenData*)optixGetSbtDataPointer();
-	LightSource* lightSource = raygenData->lightSource;	
+	LightSource* lightSource = raygenData->lightSource;
 
 	// cos sampling(should be uniformly sampling a sphere)
 	float3 dir = randomDirectionCosN(normalize(lightSource->direction), 1.0f, &state);

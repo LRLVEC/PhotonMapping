@@ -10,6 +10,7 @@
 #include <_STL.h>
 
 void initRandom(curandState* state, int seed, unsigned int block, unsigned int grid, unsigned int MaxNum);
+void Gather(CameraRayData* cameraRayDatas, Photon* photonMap, float3* normals, float3* kds, int* NOLT, int* photonMapStartIdxs, uint2 size, Parameters& paras);
 
 namespace CUDA
 {
@@ -43,6 +44,7 @@ namespace CUDA
 			SbtRecord<Pt_HitData> pt_hitData;
 			LightSource lightSource;
 			Buffer lightSourceBuffer;
+			Buffer cameraRayBuffer;
 			Buffer photonBuffer;
 			Buffer photonMapBuffer;
 			Buffer rt_raygenDataBuffer;
@@ -76,56 +78,57 @@ namespace CUDA
 					OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
 					OPTIX_COMPILE_OPTIMIZATION_LEVEL_3,
 					OPTIX_COMPILE_DEBUG_LEVEL_NONE },
-				pt_moduleCompileOptions{
-					OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-					OPTIX_COMPILE_OPTIMIZATION_LEVEL_3,
-					OPTIX_COMPILE_DEBUG_LEVEL_NONE },
-				rt_pipelineCompileOptions{ false,
-					OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
-					8,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },//OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE: new in OptiX7.1.0
-				pt_pipelineCompileOptions{ false,
-					OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
-					8,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },
-				mm(&_sourceManager->folder, context, &rt_moduleCompileOptions, &rt_pipelineCompileOptions),
-				rt_programGroupOptions{},
-				pt_programGroupOptions{},
-				pt_miss(Vector<String<char>>("__miss__Ahh"), Program::Miss, &rt_programGroupOptions, context, &mm),
-				rt_raygen(Vector<String<char>>("__raygen__RayAllocator"), Program::RayGen, &rt_programGroupOptions, context, &mm),
-				rt_hitRayRadiance(Vector<String<char>>("__closesthit__RayRadiance"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
-				rt_hitShadowRay(Vector<String<char>>("__closesthit__ShadowRay"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
-				rt_missRayRadiance(Vector<String<char>>("__miss__RayRadiance"), Program::Miss, &rt_programGroupOptions, context, &mm),
-				rt_missShadowRay(Vector<String<char>>("__miss__ShadowRay"), Program::Miss, &rt_programGroupOptions, context, &mm),
-				pt_raygen(Vector<String<char>>("__raygen__PhotonEmit"), Program::RayGen, &pt_programGroupOptions, context, &mm),
-				pt_closestHit(Vector<String<char>>("__closesthit__PhotonHit"), Program::HitGroup, &pt_programGroupOptions, context, &mm),
-				rt_pipelineLinkOptions{ 1,OPTIX_COMPILE_DEBUG_LEVEL_NONE },//no overrideUsesMotionBlur in OptiX7.1.0
-				pt_pipelineLinkOptions{ 10,OPTIX_COMPILE_DEBUG_LEVEL_NONE }, // NOTE: maxDepth = 10 in photon trace stage
-				rt_pip(context, &rt_pipelineCompileOptions, &rt_pipelineLinkOptions, { rt_raygen ,rt_hitRayRadiance, rt_hitShadowRay, rt_missRayRadiance, rt_missShadowRay }),
-				pt_pip(context, &pt_pipelineCompileOptions, &pt_pipelineLinkOptions, { pt_raygen ,pt_closestHit, pt_miss }),
-				lightSourceBuffer(lightSource, false),
-				photonBuffer(Buffer::Device),
-				photonMapBuffer(Buffer::Device),
-				pt_missDataBuffer(Buffer::Device),
-				rt_raygenDataBuffer(rt_raygenData, false),
-				rt_hitDataBuffer(Buffer::Device),
-				rt_missDataBuffer(Buffer::Device),
-				pt_raygenDataBuffer(pt_raygenData, false),
-				pt_hitDataBuffer(pt_hitData, false),
-				rt_sbt({}),
-				pt_sbt({}),
-				frameBuffer(*dr),
-				parasBuffer(paras, false),
-				box(_sourceManager->folder.find("resources/boxnew.stl").readSTL()),
-				vertices(Buffer::Device),
-				normals(Buffer::Device),
-				kds(Buffer::Device),
-				NOLT(Buffer::Device),
-				photonMapStartIdxs(Buffer::Device),
-				debugDatas(Buffer::Device),
-				triangleBuildInput({}),
-				accelOptions({}),
-				GASOutput(Buffer::Device),
-				GASHandle(0),
-				photonFlag(true)
+					pt_moduleCompileOptions{
+						OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+						OPTIX_COMPILE_OPTIMIZATION_LEVEL_3,
+						OPTIX_COMPILE_DEBUG_LEVEL_NONE },
+						rt_pipelineCompileOptions{ false,
+							OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
+							8,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },//OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE: new in OptiX7.1.0
+							pt_pipelineCompileOptions{ false,
+								OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
+								8,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },
+								mm(&_sourceManager->folder, context, &rt_moduleCompileOptions, &rt_pipelineCompileOptions),
+								rt_programGroupOptions{},
+								pt_programGroupOptions{},
+								pt_miss(Vector<String<char>>("__miss__Ahh"), Program::Miss, &rt_programGroupOptions, context, &mm),
+								rt_raygen(Vector<String<char>>("__raygen__RayAllocator"), Program::RayGen, &rt_programGroupOptions, context, &mm),
+								rt_hitRayRadiance(Vector<String<char>>("__closesthit__RayRadiance"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
+								rt_hitShadowRay(Vector<String<char>>("__closesthit__ShadowRay"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
+								rt_missRayRadiance(Vector<String<char>>("__miss__RayRadiance"), Program::Miss, &rt_programGroupOptions, context, &mm),
+								rt_missShadowRay(Vector<String<char>>("__miss__ShadowRay"), Program::Miss, &rt_programGroupOptions, context, &mm),
+								pt_raygen(Vector<String<char>>("__raygen__PhotonEmit"), Program::RayGen, &pt_programGroupOptions, context, &mm),
+								pt_closestHit(Vector<String<char>>("__closesthit__PhotonHit"), Program::HitGroup, &pt_programGroupOptions, context, &mm),
+								rt_pipelineLinkOptions{ 1,OPTIX_COMPILE_DEBUG_LEVEL_NONE },//no overrideUsesMotionBlur in OptiX7.1.0
+								pt_pipelineLinkOptions{ 10,OPTIX_COMPILE_DEBUG_LEVEL_NONE }, // NOTE: maxDepth = 10 in photon trace stage
+								rt_pip(context, &rt_pipelineCompileOptions, &rt_pipelineLinkOptions, { rt_raygen ,rt_hitRayRadiance, rt_hitShadowRay, rt_missRayRadiance, rt_missShadowRay }),
+								pt_pip(context, &pt_pipelineCompileOptions, &pt_pipelineLinkOptions, { pt_raygen ,pt_closestHit, pt_miss }),
+								lightSourceBuffer(lightSource, false),
+								cameraRayBuffer(Buffer::Device),
+								photonBuffer(Buffer::Device),
+								photonMapBuffer(Buffer::Device),
+								pt_missDataBuffer(Buffer::Device),
+								rt_raygenDataBuffer(rt_raygenData, false),
+								rt_hitDataBuffer(Buffer::Device),
+								rt_missDataBuffer(Buffer::Device),
+								pt_raygenDataBuffer(pt_raygenData, false),
+								pt_hitDataBuffer(pt_hitData, false),
+								rt_sbt({}),
+								pt_sbt({}),
+								frameBuffer(*dr),
+								parasBuffer(paras, false),
+								box(_sourceManager->folder.find("resources/boxnew.stl").readSTL()),
+								vertices(Buffer::Device),
+								normals(Buffer::Device),
+								kds(Buffer::Device),
+								NOLT(Buffer::Device),
+								photonMapStartIdxs(Buffer::Device),
+								debugDatas(Buffer::Device),
+								triangleBuildInput({}),
+								accelOptions({}),
+								GASOutput(Buffer::Device),
+								GASHandle(0),
+								photonFlag(true)
 			{
 				box.getVerticesRepeated();
 				box.getNormals();
@@ -151,7 +154,7 @@ namespace CUDA
 				/*lightSource.type = LightSource::SPOT;
 				lightSource.position = { 0.0f,-0.25f,0.0f };
 				lightSource.power = { 1.0f, 1.0f, 1.0f };*/
-				
+
 				lightSourceBuffer.copy(lightSource);
 
 				uint32_t triangle_input_flags[1] =  // One per SBT record for this build input
@@ -225,26 +228,31 @@ namespace CUDA
 					direct_callable_stack_size_from_state,
 					continuation_stack_size, 3);*/
 
-				// debug data
-				// NOTE: resize unfinished!
+					// debug data
+					// NOTE: resize unfinished!
 				int debugDatasCnt = _size.w * _size.h;
 				DebugData* debugDatasTemp = new DebugData[debugDatasCnt];
-				debugDatas.copy(debugDatasTemp, sizeof(DebugData) * debugDatasCnt);
+				debugDatas.copy(debugDatasTemp, sizeof(DebugData)* debugDatasCnt);
 				delete[] debugDatasTemp;
+
+				cameraRayBuffer.resize(sizeof(CameraRayData)* paras.size.x* paras.size.y);
 
 				// ray trace pass
 				optixSbtRecordPackHeader(rt_raygen, &rt_raygenData);
+				rt_raygenData.data.cameraRayDatas = (CameraRayData*)cameraRayBuffer.device;
 				rt_raygenDataBuffer.copy(rt_raygenData);
 
 				optixSbtRecordPackHeader(rt_hitRayRadiance, &rt_hitDatas[RayRadiance]);
 				rt_hitDatas[RayRadiance].data.normals = (float3*)normals.device;
 				rt_hitDatas[RayRadiance].data.kds = (float3*)kds.device;
 				rt_hitDatas[RayRadiance].data.lightSource = (LightSource*)lightSourceBuffer.device;
+				rt_hitDatas[RayRadiance].data.cameraRayDatas = (CameraRayData*)cameraRayBuffer.device;
 				//rt_hitDatas[RayRadiance].data.debugDatas = (DebugData*)debugDatas.device;
 				optixSbtRecordPackHeader(rt_hitShadowRay, &rt_hitDatas[ShadowRay]);
 				rt_hitDatas[ShadowRay].data.normals = (float3*)normals.device;
 				rt_hitDatas[ShadowRay].data.kds = (float3*)kds.device;
 				rt_hitDatas[ShadowRay].data.lightSource = (LightSource*)lightSourceBuffer.device;
+				rt_hitDatas[ShadowRay].data.cameraRayDatas = (CameraRayData*)cameraRayBuffer.device;
 				//rt_hitDatas[ShadowRay].data.debugDatas = (DebugData*)debugDatas.device;
 				rt_hitDataBuffer.copy(rt_hitDatas, sizeof(rt_hitDatas));
 
@@ -303,20 +311,22 @@ namespace CUDA
 					photonFlag = false;
 				}
 				optixLaunch(rt_pip, cuStream, parasBuffer, sizeof(Parameters), &rt_sbt, paras.size.x, paras.size.y, 1);
+				Gather((CameraRayData*)cameraRayBuffer.device, (Photon*)photonMapBuffer.device,
+					(float3*)normals.device, (float3*)kds.device, (int*)NOLT.device, (int*)photonMapStartIdxs.device, paras.size, *(Parameters*)parasBuffer.device);
 				//Debug();
 				frameBuffer.unmap();
 			}
 			void Debug()
 			{
 				debugDatas.map();
-				
+
 				size_t debugDatasSize = debugDatas.size;
 				int debugDatasCnt = debugDatasSize / sizeof(DebugData);
 				DebugData* debugDatasTemp = new DebugData[debugDatasCnt];
 				cudaMemcpy(debugDatasTemp, debugDatas.device, debugDatasSize, cudaMemcpyDeviceToHost);
 
 				for (int i = 0; i < 1; i++)
-					printf("(%f,%f,%f) -> %d should be %d\n", debugDatasTemp[i].position.x, debugDatasTemp[i].position.y, debugDatasTemp[i].position.z,debugDatasTemp[i].hashValue,hash(debugDatasTemp[i].position));
+					printf("(%f,%f,%f) -> %d should be %d\n", debugDatasTemp[i].position.x, debugDatasTemp[i].position.y, debugDatasTemp[i].position.z, debugDatasTemp[i].hashValue, hash(debugDatasTemp[i].position));
 
 				delete[] debugDatasTemp;
 
@@ -330,6 +340,17 @@ namespace CUDA
 				paras.size = make_uint2(_size.w, _size.h);
 				parasBuffer.copy(paras);
 				frameBuffer.unmap();
+
+				rt_raygenDataBuffer.map();
+				rt_hitDataBuffer.map();
+				cameraRayBuffer.resize(sizeof(CameraRayData) * _size.w * _size.h);
+				rt_raygenData.data.cameraRayDatas = (CameraRayData*)cameraRayBuffer.device;
+				rt_raygenDataBuffer.copy(rt_raygenData);
+				rt_hitDatas[RayRadiance].data.cameraRayDatas = (CameraRayData*)cameraRayBuffer.device;
+				rt_hitDatas[ShadowRay].data.cameraRayDatas = (CameraRayData*)cameraRayBuffer.device;
+				rt_hitDataBuffer.copy(rt_hitDatas, sizeof(rt_hitDatas));
+				rt_raygenDataBuffer.unmap();
+				rt_hitDataBuffer.unmap();
 			}
 			void terminate()
 			{
@@ -383,15 +404,15 @@ namespace CUDA
 				printf("bbmax:(%f,%f,%f)\n", bbmax.x, bbmax.y, bbmax.z);*/
 
 				// specify the grid size
-				paras.gridSize.x = (int)ceilf((bbmax.x - bbmin.x) / COLLECT_RAIDUS) + 2;
-				paras.gridSize.y = (int)ceilf((bbmax.y - bbmin.y) / COLLECT_RAIDUS) + 2;
-				paras.gridSize.z = (int)ceilf((bbmax.z - bbmin.z) / COLLECT_RAIDUS) + 2;
+				paras.gridSize.x = (int)ceilf((bbmax.x - bbmin.x) / HASH_GRID_SIDELENGTH) + 2;
+				paras.gridSize.y = (int)ceilf((bbmax.y - bbmin.y) / HASH_GRID_SIDELENGTH) + 2;
+				paras.gridSize.z = (int)ceilf((bbmax.z - bbmin.z) / HASH_GRID_SIDELENGTH) + 2;
 				/*printf("gridSize:(%d,%d,%d)\n", paras.gridSize.x, paras.gridSize.y, paras.gridSize.z);*/
 
 				// specify the world origin
-				paras.gridOrigin.x = bbmin.x - COLLECT_RAIDUS;
-				paras.gridOrigin.y = bbmin.y - COLLECT_RAIDUS;
-				paras.gridOrigin.z = bbmin.z - COLLECT_RAIDUS;
+				paras.gridOrigin.x = bbmin.x - HASH_GRID_SIDELENGTH;
+				paras.gridOrigin.y = bbmin.y - HASH_GRID_SIDELENGTH;
+				paras.gridOrigin.z = bbmin.z - HASH_GRID_SIDELENGTH;
 				/*printf("gridOrigin:(%f,%f,%f)\n", paras.gridOrigin.x, paras.gridOrigin.y, paras.gridOrigin.z);
 */
 				parasBuffer.copy(paras);
@@ -405,12 +426,12 @@ namespace CUDA
 
 				// create neighbour offset lookup table
 				int* NOLTDatas = new int[27];
-				float3 offset[27] = 
-				{	{0,0,0},{-1,0,0},{1,0,0},{0,-1,0},{0,1,0},{0,0,-1},{0,0,1},
+				float3 offset[27] =
+				{ {0,0,0},{-1,0,0},{1,0,0},{0,-1,0},{0,1,0},{0,0,-1},{0,0,1},
 					{-1,-1,0},{-1,1,0},{1,-1,0},{1,1,0},{0,-1,-1},{0,-1,1},{0,1,-1},
 					{0,1,1},{-1,0,-1},{-1,0,1},{1,0,-1},{1,0,1},{-1,-1,-1},{-1,-1,1},
 					{-1,1,-1},{-1,1,1},{1,-1,-1},{1,-1,1},{1,1,-1},{1,1,1} };
-				for(int c0(0); c0 < 27; c0++)					
+				for (int c0(0); c0 < 27; c0++)
 					NOLTDatas[c0] = offset[c0].z * paras.gridSize.x * paras.gridSize.y + offset[c0].y * paras.gridSize.x + offset[c0].x;
 				NOLT.copy(NOLTDatas, sizeof(int) * 27);
 				delete[] NOLTDatas;
@@ -446,7 +467,7 @@ namespace CUDA
 							startIdxs[i++] = j;
 					}
 				}
-				photonMapStartIdxs.copy(startIdxs, sizeof(int)* (gridCnt + 1));
+				photonMapStartIdxs.copy(startIdxs, sizeof(int) * (gridCnt + 1));
 
 				/*int emptyCnt = 0;
 				for (int i = 0; i < gridCnt; i++)

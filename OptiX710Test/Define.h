@@ -30,6 +30,13 @@ struct LightSource
 	float3 direction;
 };
 
+struct CameraRayData
+{
+	float3 position;
+	float3 direction;
+	int primIdx;
+};
+
 struct Photon
 {
 	float3 position;
@@ -66,7 +73,7 @@ struct DebugData
 // data passed to Rt_RayGen
 struct Rt_RayGenData
 {
-	
+	CameraRayData* cameraRayDatas;
 };
 
 struct Rt_HitData
@@ -74,9 +81,10 @@ struct Rt_HitData
 	float3* normals;
 	float3* kds;
 	LightSource* lightSource;
-	Photon* photonMap; 
+	Photon* photonMap;
 	int* NOLT;	// neighbour offset lookup table
 	int* photonMapStartIdxs;
+	CameraRayData* cameraRayDatas;
 	//DebugData* debugDatas;
 };
 
@@ -115,8 +123,12 @@ struct HeapPhoton
 	int index;
 };
 
-#define COLLECT_RAIDUS 0.005f
+#define COLLECT_RAIDUS 0.02f
+#define HASH_GRID_SIDELENGTH COLLECT_RAIDUS
 
-#define hash(position) ((int)floorf((position.z - paras.gridOrigin.z) / COLLECT_RAIDUS)) * paras.gridSize.x * paras.gridSize.y \
-+ ((int)floorf((position.y - paras.gridOrigin.y) / COLLECT_RAIDUS)) * paras.gridSize.x \
-+ ((int)floorf((position.x - paras.gridOrigin.x) / COLLECT_RAIDUS))
+#define hash(position) ((int)floorf((position.z - paras.gridOrigin.z) / HASH_GRID_SIDELENGTH)) * paras.gridSize.x * paras.gridSize.y \
++ ((int)floorf((position.y - paras.gridOrigin.y) / HASH_GRID_SIDELENGTH)) * paras.gridSize.x \
++ ((int)floorf((position.x - paras.gridOrigin.x) / HASH_GRID_SIDELENGTH))
+
+#define BLOCK_SIZE 2
+#define BLOCK_SIZE2 4
