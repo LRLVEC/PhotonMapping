@@ -10,7 +10,8 @@
 #include <_STL.h>
 
 void initRandom(curandState* state, int seed, unsigned int block, unsigned int grid, unsigned int MaxNum);
-void Gather(CameraRayData* cameraRayDatas, Photon* photonMap, float3* normals, float3* kds, int* NOLT, int* photonMapStartIdxs, uint2 size, Parameters& paras);
+void initNOLT(int*);
+void Gather(CameraRayData* cameraRayDatas, Photon* photonMap, float3* normals, float3* kds, int* photonMapStartIdxs, uint2 size, Parameters& paras);
 
 namespace CUDA
 {
@@ -312,7 +313,7 @@ namespace CUDA
 				}
 				optixLaunch(rt_pip, cuStream, parasBuffer, sizeof(Parameters), &rt_sbt, paras.size.x, paras.size.y, 1);
 				Gather((CameraRayData*)cameraRayBuffer.device, (Photon*)photonMapBuffer.device,
-					(float3*)normals.device, (float3*)kds.device, (int*)NOLT.device, (int*)photonMapStartIdxs.device, paras.size, *(Parameters*)parasBuffer.device);
+					(float3*)normals.device, (float3*)kds.device, (int*)photonMapStartIdxs.device, paras.size, *(Parameters*)parasBuffer.device);
 				//Debug();
 				frameBuffer.unmap();
 			}
@@ -433,7 +434,8 @@ namespace CUDA
 					{-1,1,-1},{-1,1,1},{1,-1,-1},{1,-1,1},{1,1,-1},{1,1,1} };
 				for (int c0(0); c0 < 27; c0++)
 					NOLTDatas[c0] = offset[c0].z * paras.gridSize.x * paras.gridSize.y + offset[c0].y * paras.gridSize.x + offset[c0].x;
-				NOLT.copy(NOLTDatas, sizeof(int) * 27);
+				initNOLT(NOLTDatas);
+				//NOLT.copy(NOLTDatas, sizeof(int) * 27);
 				delete[] NOLTDatas;
 
 				// reorder to build the photonMap
@@ -619,14 +621,14 @@ int main()
 	{
 		"PathTracer",
 		{
-			{800,600},
+			{1080,1200},
 			true,false
 		}
 	};
 	Window::WindowManager wm(winPara);
 	OpenGL::PathTracing pathTracer(winPara.size.size);
 	wm.init(0, &pathTracer);
-	glfwSwapInterval(1);
+	glfwSwapInterval(0);
 	FPS fps;
 	fps.refresh();
 	while (!wm.close())

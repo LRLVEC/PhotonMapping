@@ -97,11 +97,12 @@ struct PhotonMaxHeap
 	}
 };
 
+__constant__ int NOLT[27];
+
 extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* photonMap,
-	float3* normals, float3* kds, int* NOLT, int* photonMapStartIdxs, Parameters& paras)
+	float3* normals, float3* kds, int* photonMapStartIdxs, Parameters& paras)
 {
-	unsigned int block_index = blockIdx.y * gridDim.x + blockIdx.x;
-	unsigned int index = block_index * blockDim.x * blockDim.y + threadIdx.y * blockDim.x + threadIdx.x;
+	unsigned int index(blockIdx.x * blockDim.x + threadIdx.x + (blockIdx.y * blockDim.y + threadIdx.y) * blockDim.x * gridDim.x);
 	unsigned int tid = threadIdx.y * blockDim.x + threadIdx.x;
 
 	float3 hitPointPosition = cameraRayDatas[index].position;
@@ -126,7 +127,8 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 	__syncthreads();
 
 	if (hashValues[tid] != hashValues[(tid + 1) % BLOCK_SIZE2])
-		atomicAdd(&flag, 1);
+		//atomicAdd(&flag, 1);
+		flag = 1;
 
 	__syncthreads();
 
@@ -163,6 +165,8 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 		float3 indirectFlux = heap.accumulate(radius2, kds, normals, photonMap);
 
 		paras.image[index] = make_float4(indirectFlux, 1.0f);
+
+		//paras.image[index] = make_float4(1.0f, 0.0f, 0.0f, 1.0f);
 	}
 	else	// all thread hit the same hash box
 	{
@@ -185,12 +189,19 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 
 			for (int c1(startIdx + tid); c1 < endIdx; c1 += BLOCK_SIZE2)
 			{
-				int pos = atomicAdd(&photonCnt, 1);
-				photons[pos] = *(photonMap + c1);
+
+				photons[photonCnt + c1 - startIdx] = *(photonMap + c1);
 			}
 
 			__syncthreads();
+
+			if (tid == 0)
+			{
+				photonCnt += endIdx - startIdx;
+			}
 		}
+
+		__syncthreads();
 
 		float radius2 = COLLECT_RAIDUS * COLLECT_RAIDUS;
 		PhotonMaxHeap heap;
@@ -209,14 +220,20 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 		float3 indirectFlux = heap.accumulate(radius2, kds, normals, photons);
 
 		paras.image[index] = make_float4(indirectFlux, 1.0f);
+		//paras.image[index] = make_float4(0.0f, 0.0f, 1.0f, 1.0f);
 	}
 }
 
+void initNOLT(int* NOLT_host)
+{
+	cudaMemcpyToSymbol(NOLT, NOLT_host, sizeof(NOLT));
+}
+
 void Gather(CameraRayData* cameraRayDatas, Photon* photonMap,
-	float3* normals, float3* kds, int* NOLT, int* photonMapStartIdxs, uint2 size, Parameters& paras)
+	float3* normals, float3* kds, int* photonMapStartIdxs, uint2 size, Parameters& paras)
 {
 	dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
 	dim3 dimGrid(size.x / dimBlock.x, size.y / dimBlock.y);
 	GatherKernel << <dimGrid, dimBlock >> > (cameraRayDatas, photonMap,
-		normals, kds, NOLT, photonMapStartIdxs, paras);
+		normals, kds, photonMapStartIdxs, paras);
 }

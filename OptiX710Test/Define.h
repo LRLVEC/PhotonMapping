@@ -40,9 +40,9 @@ struct CameraRayData
 struct Photon
 {
 	float3 position;
+	int primIdx;
 	float3 dir;
 	float3 energy;
-	int primIdx;
 };
 
 struct PhotonHash
@@ -130,5 +130,5 @@ struct HeapPhoton
 + ((int)floorf((position.y - paras.gridOrigin.y) / HASH_GRID_SIDELENGTH)) * paras.gridSize.x \
 + ((int)floorf((position.x - paras.gridOrigin.x) / HASH_GRID_SIDELENGTH))
 
-#define BLOCK_SIZE 2
-#define BLOCK_SIZE2 4
+#define BLOCK_SIZE 8
+#define BLOCK_SIZE2 64

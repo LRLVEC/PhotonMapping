@@ -74,7 +74,7 @@ extern "C" __global__ void __closesthit__RayRadiance()
 			unsigned int pd2, pd3;
 			pP(&Tmax, pd2, pd3);
 			optixTrace(paras.handle, hitPointPosition, shadowRayDir,
-				0.001f, 1e16f,
+				0.0001f, 1e16f,
 				0.0f, OptixVisibilityMask(255), OPTIX_RAY_FLAG_NONE,
 				ShadowRay,        // SBT offset
 				RayCount,           // SBT stride

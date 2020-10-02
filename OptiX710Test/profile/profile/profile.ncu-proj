@@ -1,0 +1,53 @@
+{
+    "extension": "ncu-proj",
+    "files": [
+    ],
+    "launcher": {
+        "activity/interactiveprofile/cachecontrol": "Flush All",
+        "activity/interactiveprofile/clockcontrol": "Base",
+        "activity/interactiveprofile/disableprofilingstartstop": false,
+        "activity/interactiveprofile/enablenvtxsupport": false,
+        "activity/interactiveprofile/enableprofilingfromstart": true,
+        "activity/profile/applyrules": true,
+        "activity/profile/cachecontrol": "Flush All",
+        "activity/profile/clockcontrol": "Base",
+        "activity/profile/disableprofilingstartstop": false,
+        "activity/profile/enablenvtxsupport": false,
+        "activity/profile/enableprofilingfromstart": true,
+        "activity/profile/forceoverwrite": true,
+        "activity/profile/kernelid": "",
+        "activity/profile/kernelregex": "",
+        "activity/profile/kernelregexbase": "Function",
+        "activity/profile/launchcapturecount": "0",
+        "activity/profile/launchskipbeforematchcount": "0",
+        "activity/profile/launchskipcount": "0",
+        "activity/profile/metrics": "",
+        "activity/profile/nvtxincludeexcludeoptions": "",
+        "activity/profile/outputfile": "",
+        "activity/profile/samplingBufferSize": "33554432",
+        "activity/profile/samplingInterval": "5",
+        "activity/profile/samplingIntervalAuto": true,
+        "activity/profile/samplingMaxPasses": "5",
+        "activity/profile/targetprocesses": "Application Only",
+        "platform/linux (x86_64)/device": "",
+        "platform/linux/arguments": "",
+        "platform/linux/autoconnect": true,
+        "platform/linux/environment": "",
+        "platform/linux/executable": "",
+        "platform/linux/workingdir": "",
+        "platform/win32/arguments": "",
+        "platform/win32/autoconnect": true,
+        "platform/win32/environment": "",
+        "platform/win32/executable": "D:/files/C++/PhotonMapping/x64/Release/OptiX710Test.exe",
+        "platform/win32/executable/history": [
+            "D:/files/C++/PhotonMapping/x64/Release/OptiX710Test.exe"
+        ],
+        "platform/win32/workingdir": "D:/files/C++/PhotonMapping/OptiX710Test",
+        "platform/win32/workingdir/history": [
+            "D:/files/C++/PhotonMapping/OptiX710Test"
+        ],
+        "platform/windows/device": "localhost"
+    },
+    "uuid": "{9e34e50b-0694-41b9-941a-ead61e155ef9}",
+    "version": "1.0"
+}
