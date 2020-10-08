@@ -115,7 +115,7 @@ struct Parameters
 	int3 gridSize;
 };
 
-#define COLLECT_RAIDUS 0.02f
+#define COLLECT_RAIDUS 0.04f
 #define HASH_GRID_SIDELENGTH COLLECT_RAIDUS
 
 #define hash(position) ((int)floorf((position.z - paras.gridOrigin.z) / HASH_GRID_SIDELENGTH)) * paras.gridSize.x * paras.gridSize.y \
