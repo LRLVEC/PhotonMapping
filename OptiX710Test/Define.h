@@ -40,9 +40,8 @@ struct CameraRayData
 struct Photon
 {
 	float3 position;
-	int primIdx;
-	float3 dir;
 	float3 energy;
+	float2 dir;
 };
 
 struct PhotonHash
@@ -114,13 +113,6 @@ struct Parameters
 	curandState* randState;
 	float3 gridOrigin;
 	int3 gridSize;
-};
-
-// used in KNN photon search
-struct HeapPhoton
-{
-	float distance2;
-	int index;
 };
 
 #define COLLECT_RAIDUS 0.02f

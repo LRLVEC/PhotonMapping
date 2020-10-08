@@ -206,9 +206,8 @@ extern "C" __global__ void __closesthit__PhotonHit()
 		{
 			Photon& photon = hitData->photons[prd.startIdx + prd.numDeposits];
 			photon.position = hitPointPosition;
-			photon.dir = oldDir;
+			//photon.dir = oldDir;
 			photon.energy = prd.energy;
-			photon.primIdx = primIdx;
 			prd.numDeposits++;
 		}
 

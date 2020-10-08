@@ -14,89 +14,6 @@ void initRandom(curandState* state, int seed, unsigned int block, unsigned int g
 	initRandom << <grid, block >> > (state, seed, MaxNum);
 }
 
-struct PhotonMaxHeap
-{
-#define PHOTONHEAP_SIZE 127
-	int currentSize;
-	HeapPhoton photons[PHOTONHEAP_SIZE];
-	float3 cameraRayDir;
-
-#define PARENT(x) ((x - 1) >> 1)
-	__device__ __inline__ void siftUp(int position)
-	{
-		int tempPos = position;
-		HeapPhoton tempPhoton = photons[tempPos];
-		while (tempPos > 0 && photons[PARENT(tempPos)].distance2 < tempPhoton.distance2)
-		{
-			photons[tempPos] = photons[PARENT(tempPos)];
-			tempPos = PARENT(tempPos);
-		}
-		photons[tempPos] = tempPhoton;
-	}
-
-	__device__ __inline__ void siftDown(int position)
-	{
-		int i = position;
-		int j = 2 * i + 1;
-		HeapPhoton temp = photons[i];
-		while (j < currentSize)
-		{
-			if ((j < currentSize - 1) && photons[j].distance2 < photons[j + 1].distance2)
-				j++;
-			if (temp.distance2 < photons[j].distance2)
-			{
-				photons[i] = photons[j];
-				i = j;
-				j = 2 * j + 1;
-			}
-			else break;
-		}
-		photons[i] = temp;
-	}
-
-	__device__ __inline__ void push(const float& distance2, const int& index)
-	{
-		if (currentSize < PHOTONHEAP_SIZE)
-		{
-			photons[currentSize].distance2 = distance2;
-			photons[currentSize].index = index;
-			siftUp(currentSize);
-			currentSize++;
-			return;
-		}
-		else if (photons[0].distance2 > distance2)
-		{
-			photons[0].distance2 = distance2;
-			photons[0].index = index;
-			siftDown(0);
-		}
-	}
-
-#define filter_k 1.1
-
-	__device__ __inline__ float3 accumulate(float& radius2, const float3 * kds, const float3 * normals, const Photon * sharedPhotons)
-	{
-		float3 flux = make_float3(0.0f, 0.0f, 0.0f);
-		float Wpc = 0.0f;	// weight of cone filter
-
-		float radius = sqrtf(radius2);
-
-		for (int c0(0); c0 < currentSize; c0++)
-		{
-			const Photon& photon = sharedPhotons[photons[c0].index];
-			float3 hitPointNormal = normals[photon.primIdx];
-			if (dot(photon.dir, hitPointNormal) * dot(cameraRayDir, hitPointNormal) <= 0)
-				continue;
-			Wpc = 1.0f - sqrtf(photons[c0].distance2) / (filter_k * radius);
-			flux += photon.energy * kds[photon.primIdx] * Wpc;
-		}
-
-		flux = flux / (M_PIf * radius2) / (1 - 0.6667f / filter_k) / PT_PHOTON_CNT;
-
-		return flux;
-	}
-};
-
 __constant__ int NOLT[27];
 
 extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* photonMap,
@@ -108,10 +25,11 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 	float3 hitPointPosition = cameraRayDatas[index].position;
 	float3 hitPointDirection = cameraRayDatas[index].direction;
 	int primIdx = cameraRayDatas[index].primIdx;
+	float3 kd = kds[primIdx];
 
 	__shared__ int hashValues[BLOCK_SIZE2];
 	__shared__ int photonCnt;
-	__shared__ Photon photons[800];
+	__shared__ Photon photons[1000];
 	__shared__ int flag;
 
 	if (tid == 0)
@@ -127,7 +45,6 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 	__syncthreads();
 
 	if (hashValues[tid] != hashValues[(tid + 1) % BLOCK_SIZE2])
-		//atomicAdd(&flag, 1);
 		flag = 1;
 
 	__syncthreads();
@@ -138,13 +55,9 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 	}
 	else if (flag != 0)	// at leasy one thread hit a different hash box 
 	{
-		float radius2 = COLLECT_RAIDUS * COLLECT_RAIDUS;
-
 		int hitPointHashValue = hash(hitPointPosition);
 
-		PhotonMaxHeap heap;
-		heap.currentSize = 0;
-		heap.cameraRayDir = hitPointDirection;
+		float3 indirectFlux = make_float3(0.0f, 0.0f, 0.0f);
 
 		for (int c0(0); c0 < 27; c0++)
 		{
@@ -153,16 +66,19 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 			int endIdx = photonMapStartIdxs[gridNumber + 1];
 			for (int c1(startIdx); c1 < endIdx; c1++)
 			{
-				Photon* photon = photonMap + c1;
-				float3 diff = hitPointPosition - photon->position;
-				float distance2 = dot(diff, diff);
+				const Photon& photon = photonMap[c1];
+				float3 diff = hitPointPosition - photon.position;
+				float distance = sqrtf(dot(diff, diff));
 
-				if (distance2 <= radius2)
-					heap.push(distance2, c1);
+				if (distance <= COLLECT_RAIDUS)
+				{
+					float Wpc = 1.0f - distance / COLLECT_RAIDUS;
+					indirectFlux += photon.energy * kd * Wpc;
+				}
 			}
 		}
 
-		float3 indirectFlux = heap.accumulate(radius2, kds, normals, photonMap);
+		indirectFlux /= M_PIf * COLLECT_RAIDUS * COLLECT_RAIDUS * (1.0f - 0.6667f / 1.0f) * PT_PHOTON_CNT;
 
 		paras.image[index] = make_float4(indirectFlux, 1.0f);
 
@@ -172,52 +88,56 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 	{
 		int hitPointHashValue = hash(hitPointPosition);
 
-		__shared__ int gridNumber;
-		__shared__ int startIdx;
-		__shared__ int endIdx;
+		__shared__ int startIdx[27];
+		__shared__ int photonCnt[27];
+		__shared__ int prefixSum[27];
+		__shared__ int totalCnt;
+
+		for (int c0(tid); c0 < 27; c0 += BLOCK_SIZE2)
+		{
+			int gridNumber = hitPointHashValue + NOLT[c0];
+			startIdx[c0] = photonMapStartIdxs[gridNumber];
+			photonCnt[c0] = photonMapStartIdxs[gridNumber + 1] - startIdx[c0];
+		}
+
+		__syncthreads();
+
+		if (tid == 0)
+		{
+			prefixSum[0] = 0;
+			for (int c0(0); c0 < 26; c0++)
+				prefixSum[c0 + 1] = prefixSum[c0] + photonCnt[c0];
+			totalCnt = prefixSum[26] + photonCnt[26];
+		}
+
+		__syncthreads();
 
 		for (int c0(0); c0 < 27; c0++)
 		{
-			if (tid == 0)
+			for (int c1(tid); c1 < photonCnt[c0]; c1 += BLOCK_SIZE2)
 			{
-				gridNumber = hitPointHashValue + NOLT[c0];
-				startIdx = photonMapStartIdxs[gridNumber];
-				endIdx = photonMapStartIdxs[gridNumber + 1];
-			}
-			
-			__syncthreads();
-
-			for (int c1(startIdx + tid); c1 < endIdx; c1 += BLOCK_SIZE2)
-			{
-
-				photons[photonCnt + c1 - startIdx] = *(photonMap + c1);
-			}
-
-			__syncthreads();
-
-			if (tid == 0)
-			{
-				photonCnt += endIdx - startIdx;
+				photons[prefixSum[c0] + c1] = *(photonMap + startIdx[c0] + c1);
 			}
 		}
 
 		__syncthreads();
 
-		float radius2 = COLLECT_RAIDUS * COLLECT_RAIDUS;
-		PhotonMaxHeap heap;
-		heap.currentSize = 0;
-		heap.cameraRayDir = hitPointDirection;
+		float3 indirectFlux = make_float3(0.0f, 0.0f, 0.0f);
 
-		for (int c0(0); c0 < photonCnt; c0++)
+		for (int c0(0); c0 < totalCnt; c0++)
 		{
-			float3 diff = hitPointPosition - photons[c0].position;
-			float distance2 = dot(diff, diff);
+			const Photon& photon = photons[c0];
+			float3 diff = hitPointPosition - photon.position;
+			float distance = sqrtf(dot(diff, diff));
 
-			if (distance2 <= radius2)
-				heap.push(distance2, c0);
+			if (distance <= COLLECT_RAIDUS)
+			{
+				float Wpc = 1.0f - distance / COLLECT_RAIDUS;
+				indirectFlux += photon.energy * kd * Wpc;
+			}
 		}
 
-		float3 indirectFlux = heap.accumulate(radius2, kds, normals, photons);
+		indirectFlux /= M_PIf * COLLECT_RAIDUS * COLLECT_RAIDUS * (1.0f - 0.6667f / 1.0f) * PT_PHOTON_CNT;
 
 		paras.image[index] = make_float4(indirectFlux, 1.0f);
 		//paras.image[index] = make_float4(0.0f, 0.0f, 1.0f, 1.0f);
