@@ -312,8 +312,10 @@ namespace CUDA
 					photonFlag = false;
 				}
 				optixLaunch(rt_pip, cuStream, parasBuffer, sizeof(Parameters), &rt_sbt, paras.size.x, paras.size.y, 1);
+#ifdef CUDA_GATHER
 				Gather((CameraRayData*)cameraRayBuffer.device, (Photon*)photonMapBuffer.device,
 					(float3*)normals.device, (float3*)kds.device, (int*)photonMapStartIdxs.device, paras.size, *(Parameters*)parasBuffer.device);
+#endif
 				//Debug();
 				frameBuffer.unmap();
 			}
@@ -434,8 +436,12 @@ namespace CUDA
 					{-1,1,-1},{-1,1,1},{1,-1,-1},{1,-1,1},{1,1,-1},{1,1,1} };
 				for (int c0(0); c0 < 27; c0++)
 					NOLTDatas[c0] = offset[c0].z * paras.gridSize.x * paras.gridSize.y + offset[c0].y * paras.gridSize.x + offset[c0].x;
+				
+#ifdef OPTIX_GATHER
+				NOLT.copy(NOLTDatas, sizeof(int) * 27);
+#else if CUDA_GATHER
 				initNOLT(NOLTDatas);
-				//NOLT.copy(NOLTDatas, sizeof(int) * 27);
+#endif
 				delete[] NOLTDatas;
 
 				// reorder to build the photonMap
@@ -517,7 +523,7 @@ namespace OpenGL
 			sm(),
 			renderer(&sm, _size),
 			//test(CUDA::Buffer::Device, 4),
-			trans({ {60},{0.01,0.9,0.005},{0.006},{0,0,0},1400.0 }),
+			trans({ {60},{0.01,0.9,0.005},{0.006},{0,0,5.0f},1400.0 }),
 			pathTracer(&sm, &renderer, _size, trans.buffer.device),
 			size(_size),
 			frameSizeChanged(false)
@@ -621,7 +627,7 @@ int main()
 	{
 		"PathTracer",
 		{
-			{1080,1200},
+			{1920,1080},
 			true,false
 		}
 	};

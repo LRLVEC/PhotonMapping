@@ -84,7 +84,39 @@ extern "C" __global__ void __closesthit__RayRadiance()
 			directFlux = lightSource->power * attenuation * hitPointKd * cosDN;
 		}
 
+#ifdef OPTIX_GATHER
+		int hitPointHashValue = hash(hitPointPosition);
+		Photon* photonMap = hitData->photonMap;
+		int* NOLT = hitData->NOLT;
+		int* photonMapStartIdxs = hitData->photonMapStartIdxs;
+
+		float3 indirectFlux = make_float3(0.0f, 0.0f, 0.0f);
+
+		for (int c0(0); c0 < 27; c0++)
+		{
+			int gridNumber = hitPointHashValue + NOLT[c0];
+			int startIdx = photonMapStartIdxs[gridNumber];
+			int endIdx = photonMapStartIdxs[gridNumber + 1];
+			for (int c1(startIdx); c1 < endIdx; c1++)
+			{
+				const Photon& photon = photonMap[c1];
+				float3 diff = hitPointPosition - photon.position;
+				float distance = sqrtf(dot(diff, diff));
+
+				if (distance <= COLLECT_RAIDUS)
+				{
+					float Wpc = 1.0f - distance / COLLECT_RAIDUS;
+					indirectFlux += photon.energy * hitPointKd * Wpc;
+				}
+			}
+		}
+
+		indirectFlux /= M_PIf * COLLECT_RAIDUS * COLLECT_RAIDUS * (1.0f - 0.6667f / 1.0f) * PT_PHOTON_CNT;
+
+		float3 color = indirectFlux;
+#else
 		float3 color = 0.1f * directFlux;
+#endif
 
 		paras.image[index.y * paras.size.x + index.x] = make_float4(color, 1.0f);
 	}
