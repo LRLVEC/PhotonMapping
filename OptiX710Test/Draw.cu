@@ -103,7 +103,7 @@ extern "C" __global__ void __closesthit__RayRadiance()
 				float3 diff = hitPointPosition - photon.position;
 				float distance = sqrtf(dot(diff, diff));
 
-				if (distance <= COLLECT_RAIDUS)
+				if (distance <= COLLECT_RAIDUS && fabsf(dot(diff, hitPointNormal)) < 0.0001f)
 				{
 					float Wpc = 1.0f - distance / COLLECT_RAIDUS;
 					indirectFlux += photon.energy * hitPointKd * Wpc;
@@ -234,7 +234,7 @@ extern "C" __global__ void __closesthit__PhotonHit()
 	{
 		// hit a diffuse surface; record hit if it has bounced at least once
 		// NOTE: depth > 0 or >= 0?
-		if (prd.depth >= 0)
+		if (prd.depth > 0)
 		{
 			Photon& photon = hitData->photons[prd.startIdx + prd.numDeposits];
 			photon.position = hitPointPosition;

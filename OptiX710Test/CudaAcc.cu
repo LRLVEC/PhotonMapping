@@ -25,18 +25,15 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 	float3 hitPointPosition = cameraRayDatas[index].position;
 	float3 hitPointDirection = cameraRayDatas[index].direction;
 	int primIdx = cameraRayDatas[index].primIdx;
+	float3 normal = normals[primIdx];
 	float3 kd = kds[primIdx];
 
 	__shared__ int hashValues[BLOCK_SIZE2];
-	__shared__ int photonCnt;
-	__shared__ Photon photons[400];
+	__shared__ Photon photons[BLOCK_SIZE2];
 	__shared__ int flag;
 
-	if (tid == 0)
-	{
-		flag = 0;
-		photonCnt = 0;
-	}
+	flag = 0;
+
 	if (primIdx != -1)
 		hashValues[tid] = hash(hitPointPosition);
 	else
@@ -52,8 +49,12 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 	if (primIdx == -1)
 	{
 		paras.image[index] = make_float4(0.0f, 0.0f, 0.0f, 1.0f);
+		return;
 	}
-	else// if (flag != 0)	// at leasy one thread hit a different hash box 
+	
+#ifdef USE_SHARED_MEMORY
+	if (flag != 0)	// at leasy one thread hit a different hash box 
+#endif
 	{
 		int hitPointHashValue = hash(hitPointPosition);
 
@@ -68,11 +69,11 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 			{
 				const Photon& photon = photonMap[c1];
 				float3 diff = hitPointPosition - photon.position;
-				float distance = sqrtf(dot(diff, diff));
+				float distance2 = dot(diff, diff);
 
-				if (distance <= COLLECT_RAIDUS)
+				if (distance2 <= COLLECT_RAIDUS * COLLECT_RAIDUS && fabsf(dot(diff,normal)) < 0.0001f)
 				{
-					float Wpc = 1.0f - distance / COLLECT_RAIDUS;
+					float Wpc = 1.0f - sqrtf(distance2) / COLLECT_RAIDUS;
 					indirectFlux += photon.energy * kd * Wpc;
 				}
 			}
@@ -84,45 +85,61 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 
 		//paras.image[index] = make_float4(1.0f, 0.0f, 0.0f, 1.0f);
 	}
-	//else	// all thread hit the same hash box
-	//{
-	//	int hitPointHashValue = hash(hitPointPosition);
+#ifdef USE_SHARED_MEMORY
+	else	// all thread hit the same hash box
+	{
+		float3 indirectFlux = make_float3(0.0f, 0.0f, 0.0f);
 
-	//	float3 indirectFlux = make_float3(0.0f, 0.0f, 0.0f);
+		for (int i = 0; i < 27; i++)
+		{
+			__shared__ Photon* photonStartIdx;
+			__shared__ int photonCnt;
+			__shared__ int paddedCnt;
+			int collectPhotonCnt = 0;
 
-	//	for (int i = 0; i < 27; i++)
-	//	{
-	//		int gridNumber = hitPointHashValue + NOLT[i];
-	//		int startIdx = photonMapStartIdxs[gridNumber];
-	//		int endIdx = photonMapStartIdxs[gridNumber + 1];
-	//		int photonCnt = endIdx - startIdx;
+			if (tid == 0)
+			{
+				int gridNumber = hash(hitPointPosition) + NOLT[i];
+				int startIdx = photonMapStartIdxs[gridNumber];
+				int endIdx = photonMapStartIdxs[gridNumber + 1];
 
-	//		for (int j = tid; j < photonCnt; j += BLOCK_SIZE2)
-	//			photons[j] = *(photonMap + startIdx + j);
+				photonStartIdx = photonMap + startIdx;
+				photonCnt = endIdx - startIdx;
+				paddedCnt = ((photonCnt - 1) / BLOCK_SIZE2 + 1) * BLOCK_SIZE2;
+			}
 
-	//		__syncthreads();
+			__syncthreads();
 
-	//		for (int j = 0; j < photonCnt; j++)
-	//		{
-	//			const Photon& photon = photons[j];
-	//			float3 diff = hitPointPosition - photon.position;
-	//			float distance = sqrtf(dot(diff, diff));
+			for (int j = tid; j < paddedCnt; j += BLOCK_SIZE2)
+			{
+				if (j < photonCnt)
+					photons[tid] = *(photonStartIdx + j);
+				
+				__syncthreads();
 
-	//			if (distance <= COLLECT_RAIDUS)
-	//			{
-	//				float Wpc = 1.0f - distance / COLLECT_RAIDUS;
-	//				indirectFlux += photon.energy * kd * Wpc;
-	//			}
-	//		}
+				for (int k = 0; k < BLOCK_SIZE2 && collectPhotonCnt < photonCnt; k++, collectPhotonCnt++)
+				{
+					const Photon& photon = photons[k];
+					float3 diff = hitPointPosition - photon.position;
+					float distance2 = dot(diff, diff);
 
-	//		__syncthreads();
-	//	}
+					if (distance2 <= COLLECT_RAIDUS * COLLECT_RAIDUS && fabsf(dot(diff,normal)) < 0.0001f)
+					{
+						float Wpc = 1.0f - sqrtf(distance2) / COLLECT_RAIDUS;
+						indirectFlux += photon.energy * kd * Wpc;
+					}
+				}
 
-	//	indirectFlux /= M_PIf * COLLECT_RAIDUS * COLLECT_RAIDUS * (1.0f - 0.6667f / 1.0f) * PT_PHOTON_CNT;
+				__syncthreads();
+			}	
+		}
 
-	//	paras.image[index] = make_float4(indirectFlux, 1.0f);
-	//	//paras.image[index] = make_float4(0.0f, 0.0f, 1.0f, 1.0f);
-	//}
+		indirectFlux /= M_PIf * COLLECT_RAIDUS * COLLECT_RAIDUS * (1.0f - 0.6667f / 1.0f) * PT_PHOTON_CNT;
+
+		paras.image[index] = make_float4(indirectFlux, 1.0f);
+		//paras.image[index] = make_float4(0.0f, 0.0f, 1.0f, 1.0f);
+	}
+#endif
 }
 
 void initNOLT(int* NOLT_host)

@@ -1222,7 +1222,7 @@ BB5_44:
 	@%p2 bra 	BB6_1;
 
 	ld.local.u32 	%r83, [%rd2+20];
-	setp.lt.s32	%p3, %r83, 0;
+	setp.lt.s32	%p3, %r83, 1;
 	@%p3 bra 	BB6_4;
 
 	ld.local.u32 	%r84, [%rd2+16];
