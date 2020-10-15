@@ -115,8 +115,8 @@ struct Pt_HitData
 struct Parameters
 {
 	float4* image;
-	float4* c_image;
-	int2* c_index;
+	float3* c_image;
+	int* c_index;
 	OptixTraversableHandle handle;
 	TransInfo* trans;
 	TransInfo* rightEyeTrans;

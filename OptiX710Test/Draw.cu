@@ -13,15 +13,15 @@ extern "C" __global__ void __raygen__RayAllocator()
 
 	if (paras.eye == LeftEye)
 	{
-		paras.c_image[index.y * paras.size.x + index.x] = make_float4(0.0f, 0.0f, 0.0f, 1.0f);
-		paras.c_index[index.y * paras.size.x + index.x] = make_int2(-1, -1);
+		paras.c_image[index.y * paras.size.x + index.x] = make_float3(0.0f, 0.0f, 0.0f);
+		paras.c_index[index.y * paras.size.x + index.x] = -1;
 	}
 	else
 	{
-		int2 c_index = paras.c_index[index.y * paras.size.x + index.x];
-		if (c_index.x != -1 && c_index.y != -1)
+		int c_index = paras.c_index[index.y * paras.size.x + index.x];
+		if (c_index != -1)
 		{
-			paras.image[index.y * paras.size.x + index.x] = paras.c_image[index.y * paras.size.x + index.x];
+			paras.image[index.y * paras.size.x + index.x] = make_float4(paras.c_image[index.y * paras.size.x + index.x], 1.0f);
 			return;
 		}
 	}
@@ -73,7 +73,7 @@ static __device__ __inline__ void IntersectionIndex()
 	int xIndex = (int)dot(hitPosition - OWorldPos, normalize(XWorldPos - OWorldPos));
 	int yIndex = (int)dot(hitPosition - OWorldPos, normalize(YWorldPos - OWorldPos));
 	if (xIndex >= 0 && xIndex < paras.size.x && yIndex >= 0 && yIndex < paras.size.y)
-		paras.c_index[index.y * paras.size.x + index.x] = make_int2(xIndex, yIndex);
+		paras.c_index[index.y * paras.size.x + index.x] = yIndex * paras.size.x + xIndex;
 }
 
 extern "C" __global__ void __closesthit__RayRadiance()
@@ -116,15 +116,13 @@ extern "C" __global__ void __closesthit__RayRadiance()
 	
 			unsigned int pd0, pd1;
 			pP(&attenuation, pd0, pd1);
-			unsigned int pd2, pd3;
-			pP(&Tmax, pd2, pd3);
 			optixTrace(paras.handle, hitPointPosition, shadowRayDir,
-				0.0001f, 1e16f,
+				0.0001f, Tmax,
 				0.0f, OptixVisibilityMask(255), OPTIX_RAY_FLAG_NONE,
 				ShadowRay,        // SBT offset
 				RayCount,           // SBT stride
 				ShadowRay,        // missSBTIndex
-				pd0, pd1, pd2, pd3);
+				pd0, pd1);
 
 			directFlux = lightSource->power * attenuation * hitPointKd * cosDN;
 		}
@@ -136,22 +134,19 @@ extern "C" __global__ void __closesthit__RayRadiance()
 			float Tmax = sqrtf(dot(connectRayDir, connectRayDir));
 			connectRayDir = normalize(connectRayDir);
 
-			unsigned int pd0, pd1;
-			pP(&Tmax, pd0, pd1);
 			optixTrace(paras.handle, hitPointPosition, connectRayDir,
-				0.0001f, 1e16f,
+				0.0001f, Tmax,
 				0.0f, OptixVisibilityMask(255), OPTIX_RAY_FLAG_NONE,
 				ConnectRay,        // SBT offset
 				RayCount,           // SBT stride
-				ConnectRay,        // missSBTIndex
-				pd0, pd1);
+				ConnectRay);		// missSBTIndex
 
 			float cosDN = fabsf(dot(connectRayDir, hitPointNormal));// NOTE: fabsf?
 			float3 connectDirectFlux = lightSource->power * attenuation * hitPointKd * cosDN;
-			int2 c_index = paras.c_index[index.y * paras.size.x + index.x];
-			if (c_index.x != -1 && c_index.y != -1)
+			int c_index = paras.c_index[index.y * paras.size.x + index.x];
+			if (c_index != -1)
 			{
-				paras.c_image[index.y * paras.size.x + index.x] = make_float4(0.1f * directFlux, 1.0f);
+				paras.c_image[index.y * paras.size.x + index.x] = 0.1f * directFlux;
 			}
 		}
 		
@@ -189,13 +184,13 @@ extern "C" __global__ void __closesthit__RayRadiance()
 #else
 		float3 color = 0.1f * directFlux;
 #endif
-
+		//color = 0.1f * directFlux;
 		paras.image[index.y * paras.size.x + index.x] = make_float4(color, 1.0f);
 
-		int2 c_index = paras.c_index[index.y * paras.size.x + index.x];
-		if (c_index.x != -1 && c_index.y != -1)
+		int c_index = paras.c_index[index.y * paras.size.x + index.x];
+		if (c_index != -1)
 		{
-			paras.c_image[index.y * paras.size.x + index.x] = make_float4(color, 1.0f);
+			paras.c_image[index.y * paras.size.x + index.x] = color;
 		}
 	}
 }
@@ -203,26 +198,14 @@ extern "C" __global__ void __closesthit__RayRadiance()
 extern "C" __global__ void __closesthit__ShadowRay()
 {
 	unsigned int pd0, pd1;
-	unsigned int pd2, pd3;
 	pd0 = optixGetPayload_0();
 	pd1 = optixGetPayload_1();
-	pd2 = optixGetPayload_2();
-	pd3 = optixGetPayload_3();
-	float Tmax = *(float*)uP(pd2, pd3);
-	if (Tmax > optixGetRayTmax())
-		* (float*)uP(pd0, pd1) = 0.0f;
+	* (float*)uP(pd0, pd1) = 0.0f;
 }
 
 extern "C" __global__ void __closesthit__ConnectRay()
 {
-	unsigned int pd0, pd1;
-	pd0 = optixGetPayload_0();
-	pd1 = optixGetPayload_1();
-	float Tmax = *(float*)uP(pd0, pd1);
-	if (Tmax < optixGetRayTmax())
-	{
-		IntersectionIndex();
-	}
+	IntersectionIndex();
 }
 
 extern "C" __global__ void __miss__RayRadiance()

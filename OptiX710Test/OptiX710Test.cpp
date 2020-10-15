@@ -386,15 +386,15 @@ namespace CUDA
 			virtual void resize(OpenGL::FrameScale const& _size, GLuint _gl)
 			{
 				frameBuffer.resize(_gl);
-				c_imageBuffer.resize(sizeof(float4) * _size.h * _size.w);
-				c_indexBuffer.resize(sizeof(uint2) * _size.h * _size.w);
+				c_imageBuffer.resize(sizeof(float3) * _size.h * _size.w);
+				c_indexBuffer.resize(sizeof(int) * _size.h * _size.w);
 				
 				frameBuffer.map();
 				c_imageBuffer.map();
 				c_indexBuffer.map();
 				paras.image = (float4*)frameBuffer.device;
-				paras.c_image = (float4*)c_imageBuffer.device;
-				paras.c_index = (int2*)c_indexBuffer.device;
+				paras.c_image = (float3*)c_imageBuffer.device;
+				paras.c_index = (int*)c_indexBuffer.device;
 				paras.size = make_uint2(_size.w, _size.h);
 				parasBuffer.copy(paras);
 				c_indexBuffer.unmap();
@@ -576,7 +576,7 @@ namespace OpenGL
 			sm(),
 			renderer(&sm, _size),
 			//test(CUDA::Buffer::Device, 4),
-			trans({ {60},{0.01,0.9,0.005},{0.006},{0,0,1.0f},1400.0 }),
+			trans({ {60},{0.01,0.9,0.005},{0.006},{0,0,5.0f},1400.0 }),
 			pathTracer(&sm, &renderer, _size, trans.buffer.device),
 			size(_size),
 			frameSizeChanged(false)
