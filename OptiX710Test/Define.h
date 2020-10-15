@@ -16,8 +16,17 @@ enum RayType
 {
 	RayRadiance = 0,
 	ShadowRay = 1,
+	ConnectRay = 2,
 	RayCount
 };
+
+enum eyeType
+{
+	LeftEye = 0,
+	RightEye = 1,
+	EyeCount
+};
+
 struct RayData
 {
 	float r, g, b;
@@ -65,14 +74,14 @@ struct PhotonPrd
 
 struct DebugData
 {
-	float3 position;
-	int hashValue;
+	float3 v;
 };
 
 // data passed to Rt_RayGen
 struct Rt_RayGenData
 {
 	CameraRayData* cameraRayDatas;
+	DebugData* debugDatas;
 };
 
 struct Rt_HitData
@@ -84,7 +93,6 @@ struct Rt_HitData
 	int* NOLT;	// neighbour offset lookup table
 	int* photonMapStartIdxs;
 	CameraRayData* cameraRayDatas;
-	//DebugData* debugDatas;
 };
 
 #define PT_PHOTON_CNT 640000
@@ -107,15 +115,19 @@ struct Pt_HitData
 struct Parameters
 {
 	float4* image;
+	float4* c_image;
+	int2* c_index;
 	OptixTraversableHandle handle;
 	TransInfo* trans;
+	TransInfo* rightEyeTrans;
 	uint2 size;
 	curandState* randState;
 	float3 gridOrigin;
 	int3 gridSize;
+	eyeType eye;
 };
 
-#define COLLECT_RAIDUS 0.2f
+#define COLLECT_RAIDUS 0.08f
 #define HASH_GRID_SIDELENGTH COLLECT_RAIDUS
 
 #define hash(position) ((int)floorf((position.z - paras.gridOrigin.z) / HASH_GRID_SIDELENGTH)) * paras.gridSize.x * paras.gridSize.y \
@@ -125,7 +137,7 @@ struct Parameters
 #define BLOCK_SIZE 8
 #define BLOCK_SIZE2 64
 
-#define CUDA_GATHER
-//#define OPTIX_GATHER
+//#define CUDA_GATHER
+#define OPTIX_GATHER
 
-#define USE_SHARED_MEMORY
+//#define USE_SHARED_MEMORY

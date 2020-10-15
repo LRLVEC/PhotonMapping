@@ -14,7 +14,7 @@ void initRandom(curandState* state, int seed, unsigned int block, unsigned int g
 	initRandom << <grid, block >> > (state, seed, MaxNum);
 }
 
-__constant__ int NOLT[27];
+__constant__ int NOLT[9];
 
 extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* photonMap,
 	float3* normals, float3* kds, int* photonMapStartIdxs, Parameters& paras)
@@ -60,11 +60,11 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 
 		float3 indirectFlux = make_float3(0.0f, 0.0f, 0.0f);
 
-		for (int c0(0); c0 < 27; c0++)
+		for (int c0(0); c0 < 9; c0++)
 		{
 			int gridNumber = hitPointHashValue + NOLT[c0];
 			int startIdx = photonMapStartIdxs[gridNumber];
-			int endIdx = photonMapStartIdxs[gridNumber + 1];
+			int endIdx = photonMapStartIdxs[gridNumber + 3];
 			for (int c1(startIdx); c1 < endIdx; c1++)
 			{
 				const Photon& photon = photonMap[c1];
@@ -90,7 +90,7 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 	{
 		float3 indirectFlux = make_float3(0.0f, 0.0f, 0.0f);
 
-		for (int i = 0; i < 27; i++)
+		for (int i = 0; i < 9; i++)
 		{
 			__shared__ Photon* photonStartIdx;
 			__shared__ int photonCnt;
@@ -101,7 +101,7 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 			{
 				int gridNumber = hash(hitPointPosition) + NOLT[i];
 				int startIdx = photonMapStartIdxs[gridNumber];
-				int endIdx = photonMapStartIdxs[gridNumber + 1];
+				int endIdx = photonMapStartIdxs[gridNumber + 3];
 
 				photonStartIdx = photonMap + startIdx;
 				photonCnt = endIdx - startIdx;

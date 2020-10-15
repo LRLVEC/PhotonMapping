@@ -11,12 +11,27 @@ extern "C" __global__ void __raygen__RayAllocator()
 {
 	uint2 index = make_uint2(optixGetLaunchIndex());
 
+	if (paras.eye == LeftEye)
+	{
+		paras.c_image[index.y * paras.size.x + index.x] = make_float4(0.0f, 0.0f, 0.0f, 1.0f);
+		paras.c_index[index.y * paras.size.x + index.x] = make_int2(-1, -1);
+	}
+	else
+	{
+		int2 c_index = paras.c_index[index.y * paras.size.x + index.x];
+		if (c_index.x != -1 && c_index.y != -1)
+		{
+			paras.image[index.y * paras.size.x + index.x] = paras.c_image[index.y * paras.size.x + index.x];
+			return;
+		}
+	}
+
 	Rt_RayGenData* raygenData = (Rt_RayGenData*)optixGetSbtDataPointer();
 	CameraRayData& cameraRayData = raygenData->cameraRayDatas[index.y * paras.size.x + index.x];
+	//DebugData& debugData = raygenData->debugDatas[index.y * paras.size.x + index.x];
 	cameraRayData.primIdx = -1;
 
-	float2 ahh = random(index, paras.size, 0) +
-		make_float2(index) - make_float2(paras.size) / 2.0f;
+	float2 ahh = random(index, paras.size, 0) + make_float2(index) - make_float2(paras.size) / 2.0f;
 	float4 d = make_float4(ahh, paras.trans->z0, 0);
 	float3 dd = normalize(make_float3(
 		dot(paras.trans->row0, d),
@@ -31,6 +46,35 @@ extern "C" __global__ void __raygen__RayAllocator()
 		RayRadiance);		// missSBTIndex
 }
 
+static __device__ __inline__ void IntersectionIndex()
+{
+	uint2 index = make_uint2(optixGetLaunchIndex());
+
+	float4 OCameraPos = make_float4(make_float2(0, 0) - make_float2(paras.size) / 2.0f, paras.trans->z0, 0);
+	float3 OWorldPos = paras.rightEyeTrans->r0 + (make_float3(
+		dot(paras.rightEyeTrans->row0, OCameraPos),
+		dot(paras.rightEyeTrans->row1, OCameraPos),
+		dot(paras.rightEyeTrans->row2, OCameraPos)));
+	float4 XCameraPos = make_float4(make_float2(paras.size.x, 0) - make_float2(paras.size) / 2.0f, paras.trans->z0, 0);
+	float3 XWorldPos = paras.rightEyeTrans->r0 + (make_float3(
+		dot(paras.rightEyeTrans->row0, XCameraPos),
+		dot(paras.rightEyeTrans->row1, XCameraPos),
+		dot(paras.rightEyeTrans->row2, XCameraPos)));
+	float4 YCameraPos = make_float4(make_float2(0, paras.size.y) - make_float2(paras.size) / 2.0f, paras.trans->z0, 0);
+	float3 YWorldPos = paras.rightEyeTrans->r0 + (make_float3(
+		dot(paras.rightEyeTrans->row0, YCameraPos),
+		dot(paras.rightEyeTrans->row1, YCameraPos),
+		dot(paras.rightEyeTrans->row2, YCameraPos)));
+
+	float3 normal = cross(XWorldPos - OWorldPos, YWorldPos - OWorldPos);
+	float t = dot(normal, OWorldPos - optixGetWorldRayOrigin()) / dot(normal, optixGetWorldRayDirection());
+	float3 hitPosition = optixGetWorldRayOrigin() + t * optixGetWorldRayDirection();
+
+	int xIndex = (int)dot(hitPosition - OWorldPos, normalize(XWorldPos - OWorldPos));
+	int yIndex = (int)dot(hitPosition - OWorldPos, normalize(YWorldPos - OWorldPos));
+	if (xIndex >= 0 && xIndex < paras.size.x && yIndex >= 0 && yIndex < paras.size.y)
+		paras.c_index[index.y * paras.size.x + index.x] = make_int2(xIndex, yIndex);
+}
 
 extern "C" __global__ void __closesthit__RayRadiance()
 {
@@ -60,15 +104,16 @@ extern "C" __global__ void __closesthit__RayRadiance()
 		lightSourcePosition = lightSource->position;
 
 		float3 shadowRayDir = lightSourcePosition - hitPointPosition;
-		float Tmax = sqrtf(dot(shadowRayDir, shadowRayDir));
-		shadowRayDir = normalize(shadowRayDir);
-		float cosDN = fabsf(dot(shadowRayDir, hitPointNormal));// NOTE: fabsf?
 
 		float3 directFlux = make_float3(0.0f, 0.0f, 0.0f);
+		float attenuation = 1.0f;
 
 		if (dot(shadowRayDir, hitPointNormal) * dot(rayDir, hitPointNormal) < 0)
 		{
-			float attenuation = 1.0f;
+			float Tmax = sqrtf(dot(shadowRayDir, shadowRayDir));
+			shadowRayDir = normalize(shadowRayDir);
+			float cosDN = fabsf(dot(shadowRayDir, hitPointNormal));// NOTE: fabsf?
+	
 			unsigned int pd0, pd1;
 			pP(&attenuation, pd0, pd1);
 			unsigned int pd2, pd3;
@@ -84,6 +129,33 @@ extern "C" __global__ void __closesthit__RayRadiance()
 			directFlux = lightSource->power * attenuation * hitPointKd * cosDN;
 		}
 
+		if (paras.eye == LeftEye)
+		{
+			float3 rightEyePosition = paras.rightEyeTrans->r0;
+			float3 connectRayDir = rightEyePosition - hitPointPosition;
+			float Tmax = sqrtf(dot(connectRayDir, connectRayDir));
+			connectRayDir = normalize(connectRayDir);
+
+			unsigned int pd0, pd1;
+			pP(&Tmax, pd0, pd1);
+			optixTrace(paras.handle, hitPointPosition, connectRayDir,
+				0.0001f, 1e16f,
+				0.0f, OptixVisibilityMask(255), OPTIX_RAY_FLAG_NONE,
+				ConnectRay,        // SBT offset
+				RayCount,           // SBT stride
+				ConnectRay,        // missSBTIndex
+				pd0, pd1);
+
+			float cosDN = fabsf(dot(connectRayDir, hitPointNormal));// NOTE: fabsf?
+			float3 connectDirectFlux = lightSource->power * attenuation * hitPointKd * cosDN;
+			int2 c_index = paras.c_index[index.y * paras.size.x + index.x];
+			if (c_index.x != -1 && c_index.y != -1)
+			{
+				paras.c_image[index.y * paras.size.x + index.x] = make_float4(0.1f * directFlux, 1.0f);
+			}
+		}
+		
+
 #ifdef OPTIX_GATHER
 		int hitPointHashValue = hash(hitPointPosition);
 		Photon* photonMap = hitData->photonMap;
@@ -92,11 +164,11 @@ extern "C" __global__ void __closesthit__RayRadiance()
 
 		float3 indirectFlux = make_float3(0.0f, 0.0f, 0.0f);
 
-		for (int c0(0); c0 < 27; c0++)
+		for (int c0(0); c0 < 9; c0++)
 		{
 			int gridNumber = hitPointHashValue + NOLT[c0];
 			int startIdx = photonMapStartIdxs[gridNumber];
-			int endIdx = photonMapStartIdxs[gridNumber + 1];
+			int endIdx = photonMapStartIdxs[gridNumber + 3];
 			for (int c1(startIdx); c1 < endIdx; c1++)
 			{
 				const Photon& photon = photonMap[c1];
@@ -119,6 +191,12 @@ extern "C" __global__ void __closesthit__RayRadiance()
 #endif
 
 		paras.image[index.y * paras.size.x + index.x] = make_float4(color, 1.0f);
+
+		int2 c_index = paras.c_index[index.y * paras.size.x + index.x];
+		if (c_index.x != -1 && c_index.y != -1)
+		{
+			paras.c_image[index.y * paras.size.x + index.x] = make_float4(color, 1.0f);
+		}
 	}
 }
 
@@ -135,6 +213,18 @@ extern "C" __global__ void __closesthit__ShadowRay()
 		* (float*)uP(pd0, pd1) = 0.0f;
 }
 
+extern "C" __global__ void __closesthit__ConnectRay()
+{
+	unsigned int pd0, pd1;
+	pd0 = optixGetPayload_0();
+	pd1 = optixGetPayload_1();
+	float Tmax = *(float*)uP(pd0, pd1);
+	if (Tmax < optixGetRayTmax())
+	{
+		IntersectionIndex();
+	}
+}
+
 extern "C" __global__ void __miss__RayRadiance()
 {
 	uint2 index = make_uint2(optixGetLaunchIndex());
@@ -144,6 +234,11 @@ extern "C" __global__ void __miss__RayRadiance()
 extern "C" __global__ void __miss__ShadowRay()
 {
 
+}
+
+extern "C" __global__ void __miss__ConnectRay()
+{
+	IntersectionIndex();
 }
 
 // create a orthonormal basis from normalized vector n
@@ -233,7 +328,6 @@ extern "C" __global__ void __closesthit__PhotonHit()
 	if (fmaxf(kd) > 0.0f)
 	{
 		// hit a diffuse surface; record hit if it has bounced at least once
-		// NOTE: depth > 0 or >= 0?
 		if (prd.depth > 0)
 		{
 			Photon& photon = hitData->photons[prd.startIdx + prd.numDeposits];
