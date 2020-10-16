@@ -217,7 +217,6 @@ namespace CUDA
 				else GASOutput.copy(compation);
 				paras.handle = GASHandle;
 				paras.trans = (TransInfo*)transInfoDevice;
-				paras.rightEyeTrans = (TransInfo*)transInfoDevice;
 				paras.eye = LeftEye;
 				/*OptixStackSizes stackSizes = { 0 };
 				optixUtilAccumulateStackSizes(programGroups[0], &stackSizes);
@@ -321,6 +320,8 @@ namespace CUDA
 			}
 			virtual void run()
 			{
+				UpdateRightEyeInfo(paras.trans);
+
 				frameBuffer.map();
 				if (photonFlag == true)
 				{
@@ -337,9 +338,17 @@ namespace CUDA
 				ChangeEye();
  				frameBuffer.unmap();
 			}
-			void UpdateRightEyeInfo(TransInfo* rightEyeTrans)
+			void UpdateRightEyeInfo(TransInfo* rightEyeTransDevice)
 			{
-				paras.rightEyeTrans = rightEyeTrans;
+				TransInfo rightEyeTrans;
+				cudaMemcpy(&rightEyeTrans, rightEyeTransDevice, sizeof(TransInfo), cudaMemcpyDeviceToHost);
+
+				Math::mat3<float> invAns = ~rightEyeTrans.ans;
+				for (int i = 0; i < 3; i++)
+					paras.invTrans[i] = make_float3(invAns[i][0], invAns[i][1], invAns[i][2]);
+				paras.rightEyePos = make_float3(rightEyeTrans.r0[0], rightEyeTrans.r0[1], rightEyeTrans.r0[2]);
+				paras.z0 = rightEyeTrans.z0;
+
 				parasBuffer.copy(paras);
 			}
 			void ChangeEye()
@@ -364,18 +373,18 @@ namespace CUDA
 				debugDatas.unmap();*/
 
 				size_t bufferSize = c_indexBuffer.size;
-				int cnt = bufferSize / sizeof(int2);
-				int2* temp = new int2[cnt];
+				int cnt = bufferSize / sizeof(int);
+				int* temp = new int[cnt];
 				cudaMemcpy(temp, c_indexBuffer.device, bufferSize, cudaMemcpyDeviceToHost);
 
-				for (int i = 0; i < 10000; i++)
-					printf("(%d,%d)\n", temp[i].x, temp[i].y);
+				for (int i = 0; i < 1000; i++)
+					printf("%d (%d)\n", i, temp[i]);
 
 				delete[] temp;
 
 				/*size_t bufferSize = c_imageBuffer.size;
-				int cnt = bufferSize / sizeof(float4);
-				float4* temp = new float4[cnt];
+				int cnt = bufferSize / sizeof(float3);
+				float3* temp = new float3[cnt];
 				cudaMemcpy(temp, c_imageBuffer.device, bufferSize, cudaMemcpyDeviceToHost);
 
 				for (int i = 0; i < 10; i++)
@@ -576,7 +585,7 @@ namespace OpenGL
 			sm(),
 			renderer(&sm, _size),
 			//test(CUDA::Buffer::Device, 4),
-			trans({ {60},{0.01,0.9,0.005},{0.006},{0,0,5.0f},1400.0 }),
+			trans({ {60},{0.01,0.9,0.005},{0.006},{0,0,1.0f},1400.0 }),
 			pathTracer(&sm, &renderer, _size, trans.buffer.device),
 			size(_size),
 			frameSizeChanged(false)

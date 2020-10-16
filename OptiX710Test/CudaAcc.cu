@@ -22,6 +22,11 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 	unsigned int index(blockIdx.x * blockDim.x + threadIdx.x + (blockIdx.y * blockDim.y + threadIdx.y) * blockDim.x * gridDim.x);
 	unsigned int tid = threadIdx.y * blockDim.x + threadIdx.x;
 
+#ifdef USE_CONNECTRAY
+	if (paras.eye == RightEye && paras.c_index[index] != -1)
+		return;
+#endif
+
 	float3 hitPointPosition = cameraRayDatas[index].position;
 	float3 hitPointDirection = cameraRayDatas[index].direction;
 	int primIdx = cameraRayDatas[index].primIdx;
@@ -83,6 +88,10 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 
 		paras.image[index] = make_float4(indirectFlux, 1.0f);
 
+#ifdef USE_CONNECTRAY
+		if (paras.eye == LeftEye && paras.c_index[index] != -1)
+			paras.c_image[paras.c_index[index]] = indirectFlux;
+#endif
 		//paras.image[index] = make_float4(1.0f, 0.0f, 0.0f, 1.0f);
 	}
 #ifdef USE_SHARED_MEMORY

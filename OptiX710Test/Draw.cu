@@ -11,6 +11,7 @@ extern "C" __global__ void __raygen__RayAllocator()
 {
 	uint2 index = make_uint2(optixGetLaunchIndex());
 
+#ifdef USE_CONNECTRAY
 	if (paras.eye == LeftEye)
 	{
 		paras.c_image[index.y * paras.size.x + index.x] = make_float3(0.0f, 0.0f, 0.0f);
@@ -25,6 +26,7 @@ extern "C" __global__ void __raygen__RayAllocator()
 			return;
 		}
 	}
+#endif
 
 	Rt_RayGenData* raygenData = (Rt_RayGenData*)optixGetSbtDataPointer();
 	CameraRayData& cameraRayData = raygenData->cameraRayDatas[index.y * paras.size.x + index.x];
@@ -50,30 +52,17 @@ static __device__ __inline__ void IntersectionIndex()
 {
 	uint2 index = make_uint2(optixGetLaunchIndex());
 
-	float4 OCameraPos = make_float4(make_float2(0, 0) - make_float2(paras.size) / 2.0f, paras.trans->z0, 0);
-	float3 OWorldPos = paras.rightEyeTrans->r0 + (make_float3(
-		dot(paras.rightEyeTrans->row0, OCameraPos),
-		dot(paras.rightEyeTrans->row1, OCameraPos),
-		dot(paras.rightEyeTrans->row2, OCameraPos)));
-	float4 XCameraPos = make_float4(make_float2(paras.size.x, 0) - make_float2(paras.size) / 2.0f, paras.trans->z0, 0);
-	float3 XWorldPos = paras.rightEyeTrans->r0 + (make_float3(
-		dot(paras.rightEyeTrans->row0, XCameraPos),
-		dot(paras.rightEyeTrans->row1, XCameraPos),
-		dot(paras.rightEyeTrans->row2, XCameraPos)));
-	float4 YCameraPos = make_float4(make_float2(0, paras.size.y) - make_float2(paras.size) / 2.0f, paras.trans->z0, 0);
-	float3 YWorldPos = paras.rightEyeTrans->r0 + (make_float3(
-		dot(paras.rightEyeTrans->row0, YCameraPos),
-		dot(paras.rightEyeTrans->row1, YCameraPos),
-		dot(paras.rightEyeTrans->row2, YCameraPos)));
+	float3 worldPosition = optixGetWorldRayOrigin() - paras.rightEyePos;
+	float3 cameraPosition = make_float3(
+		dot(paras.invTrans[0], worldPosition),
+		dot(paras.invTrans[1], worldPosition),
+		dot(paras.invTrans[2], worldPosition)
+	);
 
-	float3 normal = cross(XWorldPos - OWorldPos, YWorldPos - OWorldPos);
-	float t = dot(normal, OWorldPos - optixGetWorldRayOrigin()) / dot(normal, optixGetWorldRayDirection());
-	float3 hitPosition = optixGetWorldRayOrigin() + t * optixGetWorldRayDirection();
-
-	int xIndex = (int)dot(hitPosition - OWorldPos, normalize(XWorldPos - OWorldPos));
-	int yIndex = (int)dot(hitPosition - OWorldPos, normalize(YWorldPos - OWorldPos));
-	if (xIndex >= 0 && xIndex < paras.size.x && yIndex >= 0 && yIndex < paras.size.y)
-		paras.c_index[index.y * paras.size.x + index.x] = yIndex * paras.size.x + xIndex;
+	cameraPosition *= paras.z0 / cameraPosition.z;
+	int xIndex = (int)(cameraPosition.x + paras.size.x / 2.0f);
+	int yIndex = (int)(cameraPosition.y + paras.size.y / 2.0f);
+	paras.c_index[index.y * paras.size.x + index.x] = yIndex * paras.size.x + xIndex;
 }
 
 extern "C" __global__ void __closesthit__RayRadiance()
@@ -127,9 +116,10 @@ extern "C" __global__ void __closesthit__RayRadiance()
 			directFlux = lightSource->power * attenuation * hitPointKd * cosDN;
 		}
 
+#ifdef USE_CONNECTRAY
 		if (paras.eye == LeftEye)
 		{
-			float3 rightEyePosition = paras.rightEyeTrans->r0;
+			float3 rightEyePosition = paras.rightEyePos;
 			float3 connectRayDir = rightEyePosition - hitPointPosition;
 			float Tmax = sqrtf(dot(connectRayDir, connectRayDir));
 			connectRayDir = normalize(connectRayDir);
@@ -145,10 +135,9 @@ extern "C" __global__ void __closesthit__RayRadiance()
 			float3 connectDirectFlux = lightSource->power * attenuation * hitPointKd * cosDN;
 			int c_index = paras.c_index[index.y * paras.size.x + index.x];
 			if (c_index != -1)
-			{
-				paras.c_image[index.y * paras.size.x + index.x] = 0.1f * directFlux;
-			}
+				paras.c_image[c_index] = 0.1f * directFlux;
 		}
+#endif
 		
 
 #ifdef OPTIX_GATHER
@@ -187,11 +176,13 @@ extern "C" __global__ void __closesthit__RayRadiance()
 		//color = 0.1f * directFlux;
 		paras.image[index.y * paras.size.x + index.x] = make_float4(color, 1.0f);
 
+#ifdef USE_CONNECTRAY
 		int c_index = paras.c_index[index.y * paras.size.x + index.x];
 		if (c_index != -1)
 		{
-			paras.c_image[index.y * paras.size.x + index.x] = color;
+			paras.c_image[c_index] = color;
 		}
+#endif
 	}
 }
 

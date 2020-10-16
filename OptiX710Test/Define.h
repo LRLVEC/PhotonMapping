@@ -119,7 +119,9 @@ struct Parameters
 	int* c_index;
 	OptixTraversableHandle handle;
 	TransInfo* trans;
-	TransInfo* rightEyeTrans;
+	float3 invTrans[3];
+	float3 rightEyePos;
+	float z0;
 	uint2 size;
 	curandState* randState;
 	float3 gridOrigin;
@@ -137,7 +139,9 @@ struct Parameters
 #define BLOCK_SIZE 8
 #define BLOCK_SIZE2 64
 
-//#define CUDA_GATHER
-#define OPTIX_GATHER
+#define CUDA_GATHER
+//#define OPTIX_GATHER
 
 //#define USE_SHARED_MEMORY
+
+#define USE_CONNECTRAY
