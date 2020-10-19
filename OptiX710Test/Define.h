@@ -50,7 +50,8 @@ struct Photon
 {
 	float3 position;
 	float3 energy;
-	float2 dir;
+	float3 dir;
+	int primIdx;
 };
 
 struct PhotonHash
@@ -95,7 +96,7 @@ struct Rt_HitData
 	CameraRayData* cameraRayDatas;
 };
 
-#define PT_PHOTON_CNT 640000
+#define PT_PHOTON_CNT ( 1 << 18 )
 #define PT_MAX_DEPTH 8
 #define PT_MAX_DEPOSIT 8
 
@@ -139,9 +140,9 @@ struct Parameters
 #define BLOCK_SIZE 8
 #define BLOCK_SIZE2 64
 
-#define CUDA_GATHER
-//#define OPTIX_GATHER
+//#define CUDA_GATHER
+#define OPTIX_GATHER
 
 //#define USE_SHARED_MEMORY
 
-#define USE_CONNECTRAY
+//#define USE_CONNECTRAY

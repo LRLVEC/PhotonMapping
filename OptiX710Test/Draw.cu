@@ -156,6 +156,10 @@ extern "C" __global__ void __closesthit__RayRadiance()
 			for (int c1(startIdx); c1 < endIdx; c1++)
 			{
 				const Photon& photon = photonMap[c1];
+
+				if (dot(hitPointNormal, rayDir) * dot(hitPointNormal, photon.dir) < 0)
+					continue;
+
 				float3 diff = hitPointPosition - photon.position;
 				float distance = sqrtf(dot(diff, diff));
 
@@ -306,8 +310,9 @@ extern "C" __global__ void __closesthit__PhotonHit()
 		{
 			Photon& photon = hitData->photons[prd.startIdx + prd.numDeposits];
 			photon.position = hitPointPosition;
-			//photon.dir = oldDir;
 			photon.energy = prd.energy;
+			photon.dir = oldDir;
+			photon.primIdx = primIdx;
 			prd.numDeposits++;
 		}
 
