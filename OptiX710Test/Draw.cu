@@ -19,10 +19,10 @@ extern "C" __global__ void __raygen__RayAllocator()
 	}
 	else
 	{
-		int c_index = paras.c_index[index.y * paras.size.x + index.x];
-		if (c_index != -1)
+		float3 c_image = paras.c_image[index.y * paras.size.x + index.x];
+		if (fmaxf(c_image) > 0.0f)
 		{
-			paras.image[index.y * paras.size.x + index.x] = make_float4(paras.c_image[index.y * paras.size.x + index.x], 1.0f);
+			paras.image[index.y * paras.size.x + index.x] = make_float4(c_image, 1.0f);
 			return;
 		}
 	}
