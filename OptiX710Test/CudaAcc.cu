@@ -23,7 +23,7 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 	unsigned int tid = threadIdx.y * blockDim.x + threadIdx.x;
 
 #ifdef USE_CONNECTRAY
-	if (paras.eye == RightEye && paras.c_index[index] != -1)
+	if (paras.eye == RightEye && paras.c_image[index].x != 0 && paras.c_image[index].y != 0 && paras.c_image[index].z != 0)
 		return;
 #endif
 
