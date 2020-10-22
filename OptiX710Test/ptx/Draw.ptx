@@ -962,16 +962,17 @@ BB1_50:
 
 )
 {
+	.reg .pred 	%p<8>;
 	.reg .f32 	%f<48>;
-	.reg .b32 	%r<12>;
+	.reg .b32 	%r<14>;
 	.reg .b64 	%rd<5>;
 
 
 	// inline asm
-	call (%r1), _optix_get_launch_index_x, ();
+	call (%r6), _optix_get_launch_index_x, ();
 	// inline asm
 	// inline asm
-	call (%r2), _optix_get_launch_index_y, ();
+	call (%r7), _optix_get_launch_index_y, ();
 	// inline asm
 	// inline asm
 	call (%f1), _optix_get_world_ray_origin_x, ();
@@ -1002,22 +1003,33 @@ BB1_50:
 	fma.rn.f32 	%f39, %f14, %f4, %f38;
 	ld.const.f32 	%f40, [paras+88];
 	div.rn.f32 	%f41, %f40, %f39;
-	ld.const.v2.u32 	{%r4, %r5}, [paras+96];
-	cvt.rn.f32.u32	%f42, %r4;
+	ld.const.v2.u32 	{%r9, %r10}, [paras+96];
+	cvt.rn.f32.u32	%f42, %r9;
 	mul.f32 	%f43, %f42, 0f3F000000;
 	fma.rn.f32 	%f44, %f25, %f41, %f43;
-	cvt.rzi.s32.f32	%r8, %f44;
-	cvt.rn.f32.u32	%f45, %r5;
+	cvt.rzi.s32.f32	%r4, %f44;
+	cvt.rn.f32.u32	%f45, %r10;
 	mul.f32 	%f46, %f45, 0f3F000000;
 	fma.rn.f32 	%f47, %f32, %f41, %f46;
-	cvt.rzi.s32.f32	%r9, %f47;
-	mad.lo.s32 	%r10, %r4, %r9, %r8;
+	cvt.rzi.s32.f32	%r5, %f47;
+	setp.lt.s32	%p1, %r4, 0;
+	setp.ge.u32	%p2, %r4, %r9;
+	or.pred  	%p3, %p1, %p2;
+	setp.lt.s32	%p4, %r5, 0;
+	or.pred  	%p5, %p3, %p4;
+	setp.ge.u32	%p6, %r5, %r10;
+	or.pred  	%p7, %p5, %p6;
+	@%p7 bra 	BB3_2;
+
+	mad.lo.s32 	%r12, %r9, %r5, %r4;
 	ld.const.u64 	%rd1, [paras+16];
 	cvta.to.global.u64 	%rd2, %rd1;
-	mad.lo.s32 	%r11, %r4, %r2, %r1;
-	mul.wide.u32 	%rd3, %r11, 4;
+	mad.lo.s32 	%r13, %r9, %r7, %r6;
+	mul.wide.u32 	%rd3, %r13, 4;
 	add.s64 	%rd4, %rd2, %rd3;
-	st.global.u32 	[%rd4], %r10;
+	st.global.u32 	[%rd4], %r12;
+
+BB3_2:
 	ret;
 }
 
@@ -1065,16 +1077,17 @@ BB1_50:
 
 )
 {
+	.reg .pred 	%p<8>;
 	.reg .f32 	%f<48>;
-	.reg .b32 	%r<12>;
+	.reg .b32 	%r<14>;
 	.reg .b64 	%rd<5>;
 
 
 	// inline asm
-	call (%r1), _optix_get_launch_index_x, ();
+	call (%r6), _optix_get_launch_index_x, ();
 	// inline asm
 	// inline asm
-	call (%r2), _optix_get_launch_index_y, ();
+	call (%r7), _optix_get_launch_index_y, ();
 	// inline asm
 	// inline asm
 	call (%f1), _optix_get_world_ray_origin_x, ();
@@ -1105,22 +1118,33 @@ BB1_50:
 	fma.rn.f32 	%f39, %f14, %f4, %f38;
 	ld.const.f32 	%f40, [paras+88];
 	div.rn.f32 	%f41, %f40, %f39;
-	ld.const.v2.u32 	{%r4, %r5}, [paras+96];
-	cvt.rn.f32.u32	%f42, %r4;
+	ld.const.v2.u32 	{%r9, %r10}, [paras+96];
+	cvt.rn.f32.u32	%f42, %r9;
 	mul.f32 	%f43, %f42, 0f3F000000;
 	fma.rn.f32 	%f44, %f25, %f41, %f43;
-	cvt.rzi.s32.f32	%r8, %f44;
-	cvt.rn.f32.u32	%f45, %r5;
+	cvt.rzi.s32.f32	%r4, %f44;
+	cvt.rn.f32.u32	%f45, %r10;
 	mul.f32 	%f46, %f45, 0f3F000000;
 	fma.rn.f32 	%f47, %f32, %f41, %f46;
-	cvt.rzi.s32.f32	%r9, %f47;
-	mad.lo.s32 	%r10, %r4, %r9, %r8;
+	cvt.rzi.s32.f32	%r5, %f47;
+	setp.lt.s32	%p1, %r4, 0;
+	setp.ge.u32	%p2, %r4, %r9;
+	or.pred  	%p3, %p1, %p2;
+	setp.lt.s32	%p4, %r5, 0;
+	or.pred  	%p5, %p3, %p4;
+	setp.ge.u32	%p6, %r5, %r10;
+	or.pred  	%p7, %p5, %p6;
+	@%p7 bra 	BB6_2;
+
+	mad.lo.s32 	%r12, %r9, %r5, %r4;
 	ld.const.u64 	%rd1, [paras+16];
 	cvta.to.global.u64 	%rd2, %rd1;
-	mad.lo.s32 	%r11, %r4, %r2, %r1;
-	mul.wide.u32 	%rd3, %r11, 4;
+	mad.lo.s32 	%r13, %r9, %r7, %r6;
+	mul.wide.u32 	%rd3, %r13, 4;
 	add.s64 	%rd4, %rd2, %rd3;
-	st.global.u32 	[%rd4], %r10;
+	st.global.u32 	[%rd4], %r12;
+
+BB6_2:
 	ret;
 }
 

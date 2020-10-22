@@ -62,7 +62,8 @@ static __device__ __inline__ void IntersectionIndex()
 	cameraPosition *= paras.z0 / cameraPosition.z;
 	int xIndex = (int)(cameraPosition.x + paras.size.x / 2.0f);
 	int yIndex = (int)(cameraPosition.y + paras.size.y / 2.0f);
-	paras.c_index[index.y * paras.size.x + index.x] = yIndex * paras.size.x + xIndex;
+	if(xIndex >= 0 && xIndex < paras.size.x && yIndex >= 0 && yIndex < paras.size.y)
+		paras.c_index[index.y * paras.size.x + index.x] = yIndex * paras.size.x + xIndex;
 }
 
 extern "C" __global__ void __closesthit__RayRadiance()
