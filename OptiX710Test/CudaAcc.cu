@@ -23,7 +23,7 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 	unsigned int tid = threadIdx.y * blockDim.x + threadIdx.x;
 
 #ifdef USE_CONNECTRAY
-	if (paras.eye == RightEye && paras.c_image[index].x != 0 && paras.c_image[index].y != 0 && paras.c_image[index].z != 0)
+	if (paras.eye == RightEye && (paras.c_image[index].x != 0 || paras.c_image[index].y != 0 || paras.c_image[index].z != 0))
 		return;
 #endif
 
@@ -63,7 +63,7 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 	{
 		int hitPointHashValue = hash(hitPointPosition);
 
-		float3 indirectFlux = make_float3(0.0f, 0.0f, 0.0f);
+		float3 indirectFlux = make_float3(0.0f, 1.0f, 0.0f);
 
 		for (int c0(0); c0 < 9; c0++)
 		{
