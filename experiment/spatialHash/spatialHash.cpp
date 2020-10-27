@@ -10,8 +10,6 @@
 #include <_STL.h>
 
 void initRandom(curandState* state, int seed, unsigned int block, unsigned int grid, unsigned int MaxNum);
-void initNOLT(int*);
-void Gather(CameraRayData* cameraRayDatas, Photon* photonMap, float3* normals, float3* kds, int* photonMapStartIdxs, uint2 size, Parameters& paras);
 
 namespace CUDA
 {
@@ -30,10 +28,8 @@ namespace CUDA
 			Program rt_raygen;
 			Program rt_hitRayRadiance;
 			Program rt_hitShadowRay;
-			Program rt_hitConnectRay;
 			Program rt_missRayRadiance;
 			Program rt_missShadowRay;
-			Program rt_missConnectRay;
 			Program pt_raygen;
 			Program pt_closestHit;
 			Program pt_miss;
@@ -47,7 +43,6 @@ namespace CUDA
 			SbtRecord<Pt_HitData> pt_hitData;
 			LightSource lightSource;
 			Buffer lightSourceBuffer;
-			Buffer cameraRayBuffer;
 			Buffer photonBuffer;
 			Buffer photonMapBuffer;
 			Buffer rt_raygenDataBuffer;
@@ -59,8 +54,6 @@ namespace CUDA
 			OptixShaderBindingTable rt_sbt;
 			OptixShaderBindingTable pt_sbt;
 			Buffer frameBuffer;
-			Buffer c_imageBuffer;
-			Buffer c_indexBuffer;
 			CUstream cuStream;
 			Parameters paras;
 			Buffer parasBuffer;
@@ -100,18 +93,15 @@ namespace CUDA
 				rt_raygen(Vector<String<char>>("__raygen__RayAllocator"), Program::RayGen, &rt_programGroupOptions, context, &mm),
 				rt_hitRayRadiance(Vector<String<char>>("__closesthit__RayRadiance"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
 				rt_hitShadowRay(Vector<String<char>>("__closesthit__ShadowRay"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
-				rt_hitConnectRay(Vector<String<char>>("__closesthit__ConnectRay"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
 				rt_missRayRadiance(Vector<String<char>>("__miss__RayRadiance"), Program::Miss, &rt_programGroupOptions, context, &mm),
 				rt_missShadowRay(Vector<String<char>>("__miss__ShadowRay"), Program::Miss, &rt_programGroupOptions, context, &mm),
-				rt_missConnectRay(Vector<String<char>>("__miss__ConnectRay"), Program::Miss, &rt_programGroupOptions, context, &mm),
 				pt_raygen(Vector<String<char>>("__raygen__PhotonEmit"), Program::RayGen, &pt_programGroupOptions, context, &mm),
 				pt_closestHit(Vector<String<char>>("__closesthit__PhotonHit"), Program::HitGroup, &pt_programGroupOptions, context, &mm),
 				rt_pipelineLinkOptions{ 1,OPTIX_COMPILE_DEBUG_LEVEL_NONE },//no overrideUsesMotionBlur in OptiX7.1.0
 				pt_pipelineLinkOptions{ 10,OPTIX_COMPILE_DEBUG_LEVEL_NONE }, // NOTE: maxDepth = 10 in photon trace stage
-				rt_pip(context, &rt_pipelineCompileOptions, &rt_pipelineLinkOptions, { rt_raygen ,rt_hitRayRadiance, rt_hitShadowRay, rt_hitConnectRay, rt_missRayRadiance, rt_missShadowRay, rt_missConnectRay }),
+				rt_pip(context, &rt_pipelineCompileOptions, &rt_pipelineLinkOptions, { rt_raygen ,rt_hitRayRadiance, rt_hitShadowRay, rt_missRayRadiance, rt_missShadowRay }),
 				pt_pip(context, &pt_pipelineCompileOptions, &pt_pipelineLinkOptions, { pt_raygen ,pt_closestHit, pt_miss }),
 				lightSourceBuffer(lightSource, false),
-				cameraRayBuffer(Buffer::Device),
 				photonBuffer(Buffer::Device),
 				photonMapBuffer(Buffer::Device),
 				pt_missDataBuffer(Buffer::Device),
@@ -123,8 +113,6 @@ namespace CUDA
 				rt_sbt({}),
 				pt_sbt({}),
 				frameBuffer(*dr),
-				c_imageBuffer(Buffer::Device),
-				c_indexBuffer(Buffer::Device),
 				parasBuffer(paras, false),
 				box(_sourceManager->folder.find("resources/boxnew.stl").readSTL()),
 				vertices(Buffer::Device),
@@ -148,10 +136,10 @@ namespace CUDA
 				float3* kdsTemp = new float3[box.normals.length];
 				for (int c0(0); c0 < box.normals.length; c0++)
 					kdsTemp[c0] = { 0.73f, 0.73f, 0.73f };
-				kdsTemp[box.normals.length - 6] = make_float3(0.12f, 0.45f, 0.15f);
-				kdsTemp[box.normals.length - 5] = make_float3(0.12f, 0.45f, 0.15f);
-				kdsTemp[box.normals.length - 10] = make_float3(0.65f, 0.05f, 0.05f);
-				kdsTemp[box.normals.length - 9] = make_float3(0.65f, 0.05f, 0.05f);
+				kdsTemp[20] = make_float3(0.65f, 0.05f, 0.05f);
+				kdsTemp[21] = make_float3(0.65f, 0.05f, 0.05f);
+				kdsTemp[24] = make_float3(0.12f, 0.45f, 0.15f);
+				kdsTemp[25] = make_float3(0.12f, 0.45f, 0.15f);
 				kds.copy(kdsTemp, sizeof(float3)* box.normals.length);
 				delete[] kdsTemp;
 
@@ -163,7 +151,7 @@ namespace CUDA
 				/*lightSource.type = LightSource::SPOT;
 				lightSource.position = { 0.0f,-0.25f,0.0f };
 				lightSource.power = { 1.0f, 1.0f, 1.0f };*/
-
+				
 				lightSourceBuffer.copy(lightSource);
 
 				uint32_t triangle_input_flags[1] =  // One per SBT record for this build input
@@ -217,7 +205,6 @@ namespace CUDA
 				else GASOutput.copy(compation);
 				paras.handle = GASHandle;
 				paras.trans = (TransInfo*)transInfoDevice;
-				paras.eye = LeftEye;
 				/*OptixStackSizes stackSizes = { 0 };
 				optixUtilAccumulateStackSizes(programGroups[0], &stackSizes);
 
@@ -238,44 +225,32 @@ namespace CUDA
 					direct_callable_stack_size_from_state,
 					continuation_stack_size, 3);*/
 
-					// debug data
-					// NOTE: resize unfinished!
+				// debug data
+				// NOTE: resize unfinished!
 				int debugDatasCnt = _size.w * _size.h;
 				DebugData* debugDatasTemp = new DebugData[debugDatasCnt];
-				debugDatas.copy(debugDatasTemp, sizeof(DebugData)* debugDatasCnt);
+				debugDatas.copy(debugDatasTemp, sizeof(DebugData) * debugDatasCnt);
 				delete[] debugDatasTemp;
-
-				cameraRayBuffer.resize(sizeof(CameraRayData)* paras.size.x* paras.size.y);
 
 				// ray trace pass
 				optixSbtRecordPackHeader(rt_raygen, &rt_raygenData);
-				rt_raygenData.data.cameraRayDatas = (CameraRayData*)cameraRayBuffer.device;
-				rt_raygenData.data.debugDatas = (DebugData*)debugDatas.device;
 				rt_raygenDataBuffer.copy(rt_raygenData);
 
 				optixSbtRecordPackHeader(rt_hitRayRadiance, &rt_hitDatas[RayRadiance]);
 				rt_hitDatas[RayRadiance].data.normals = (float3*)normals.device;
 				rt_hitDatas[RayRadiance].data.kds = (float3*)kds.device;
 				rt_hitDatas[RayRadiance].data.lightSource = (LightSource*)lightSourceBuffer.device;
-				rt_hitDatas[RayRadiance].data.cameraRayDatas = (CameraRayData*)cameraRayBuffer.device;
 				//rt_hitDatas[RayRadiance].data.debugDatas = (DebugData*)debugDatas.device;
 				optixSbtRecordPackHeader(rt_hitShadowRay, &rt_hitDatas[ShadowRay]);
 				rt_hitDatas[ShadowRay].data.normals = (float3*)normals.device;
 				rt_hitDatas[ShadowRay].data.kds = (float3*)kds.device;
 				rt_hitDatas[ShadowRay].data.lightSource = (LightSource*)lightSourceBuffer.device;
-				rt_hitDatas[ShadowRay].data.cameraRayDatas = (CameraRayData*)cameraRayBuffer.device;
 				//rt_hitDatas[ShadowRay].data.debugDatas = (DebugData*)debugDatas.device;
-				optixSbtRecordPackHeader(rt_hitConnectRay, &rt_hitDatas[ConnectRay]);
-				rt_hitDatas[ConnectRay].data.normals = (float3*)normals.device;
-				rt_hitDatas[ConnectRay].data.kds = (float3*)kds.device;
-				rt_hitDatas[ConnectRay].data.lightSource = (LightSource*)lightSourceBuffer.device;
-				rt_hitDatas[ConnectRay].data.cameraRayDatas = (CameraRayData*)cameraRayBuffer.device;
 				rt_hitDataBuffer.copy(rt_hitDatas, sizeof(rt_hitDatas));
 
 				SbtRecord<int> rt_missDatas[RayCount];
 				optixSbtRecordPackHeader(rt_missRayRadiance, &rt_missDatas[RayRadiance]);
 				optixSbtRecordPackHeader(rt_missShadowRay, &rt_missDatas[ShadowRay]);
-				optixSbtRecordPackHeader(rt_missConnectRay, &rt_missDatas[ConnectRay]);
 				rt_missDataBuffer.copy(rt_missDatas, sizeof(rt_missDatas));
 
 				rt_sbt.raygenRecord = rt_raygenDataBuffer;
@@ -320,8 +295,6 @@ namespace CUDA
 			}
 			virtual void run()
 			{
-				UpdateRightEyeInfo(paras.trans);
-
 				frameBuffer.map();
 				if (photonFlag == true)
 				{
@@ -330,96 +303,33 @@ namespace CUDA
 					photonFlag = false;
 				}
 				optixLaunch(rt_pip, cuStream, parasBuffer, sizeof(Parameters), &rt_sbt, paras.size.x, paras.size.y, 1);
-#ifdef CUDA_GATHER
-				Gather((CameraRayData*)cameraRayBuffer.device, (Photon*)photonMapBuffer.device,
-					(float3*)normals.device, (float3*)kds.device, (int*)photonMapStartIdxs.device, paras.size, *(Parameters*)parasBuffer.device);
-#endif
 				//Debug();
-				ChangeEye();
- 				frameBuffer.unmap();
-			}
-			void UpdateRightEyeInfo(TransInfo* rightEyeTransDevice)
-			{
-				TransInfo rightEyeTrans;
-				cudaMemcpy(&rightEyeTrans, rightEyeTransDevice, sizeof(TransInfo), cudaMemcpyDeviceToHost);
-
-				Math::mat3<float> invAns = ~rightEyeTrans.ans;
-				for (int i = 0; i < 3; i++)
-					paras.invTrans[i] = make_float3(invAns[i][0], invAns[i][1], invAns[i][2]);
-				paras.rightEyePos = make_float3(rightEyeTrans.r0[0], rightEyeTrans.r0[1], rightEyeTrans.r0[2]);
-				paras.z0 = rightEyeTrans.z0;
-
-				parasBuffer.copy(paras);
-			}
-			void ChangeEye()
-			{
-				paras.eye = (paras.eye == LeftEye ? RightEye : LeftEye);
-				parasBuffer.copy(paras);
+				frameBuffer.unmap();
 			}
 			void Debug()
 			{
-				/*debugDatas.map();
-
+				debugDatas.map();
+				
 				size_t debugDatasSize = debugDatas.size;
 				int debugDatasCnt = debugDatasSize / sizeof(DebugData);
 				DebugData* debugDatasTemp = new DebugData[debugDatasCnt];
 				cudaMemcpy(debugDatasTemp, debugDatas.device, debugDatasSize, cudaMemcpyDeviceToHost);
 
-				for (int i = 0; i < 10; i++)
-					printf("(%f,%f,%f)\n", debugDatasTemp[i].v.x, debugDatasTemp[i].v.y, debugDatasTemp[i].v.z);
+				for (int i = 0; i < 1; i++)
+					printf("(%f,%f,%f) -> %d should be %d\n", debugDatasTemp[i].position.x, debugDatasTemp[i].position.y, debugDatasTemp[i].position.z,debugDatasTemp[i].hashValue,hash(debugDatasTemp[i].position));
 
 				delete[] debugDatasTemp;
 
-				debugDatas.unmap();*/
-
-				size_t bufferSize = c_indexBuffer.size;
-				int cnt = bufferSize / sizeof(int);
-				int* temp = new int[cnt];
-				cudaMemcpy(temp, c_indexBuffer.device, bufferSize, cudaMemcpyDeviceToHost);
-
-				for (int i = 0; i < 1000; i++)
-					printf("%d (%d)\n", i, temp[i]);
-
-				delete[] temp;
-
-				/*size_t bufferSize = c_imageBuffer.size;
-				int cnt = bufferSize / sizeof(float3);
-				float3* temp = new float3[cnt];
-				cudaMemcpy(temp, c_imageBuffer.device, bufferSize, cudaMemcpyDeviceToHost);
-
-				for (int i = 0; i < 10; i++)
-					printf("(%f,%f,%f)\n", temp[i].x, temp[i].y, temp[i].z);
-
-				delete[] temp;*/
+				debugDatas.unmap();
 			}
 			virtual void resize(OpenGL::FrameScale const& _size, GLuint _gl)
 			{
 				frameBuffer.resize(_gl);
-				c_imageBuffer.resize(sizeof(float3) * _size.h * _size.w);
-				c_indexBuffer.resize(sizeof(int) * _size.h * _size.w);
-				
 				frameBuffer.map();
-				c_imageBuffer.map();
-				c_indexBuffer.map();
 				paras.image = (float4*)frameBuffer.device;
-				paras.c_image = (float3*)c_imageBuffer.device;
-				paras.c_index = (int*)c_indexBuffer.device;
 				paras.size = make_uint2(_size.w, _size.h);
 				parasBuffer.copy(paras);
-				c_indexBuffer.unmap();
-				c_imageBuffer.unmap();
 				frameBuffer.unmap();
-
-				rt_raygenDataBuffer.map();
-				rt_hitDataBuffer.map();
-				cameraRayBuffer.resize(sizeof(CameraRayData) * _size.w * _size.h);
-				rt_raygenData.data.cameraRayDatas = (CameraRayData*)cameraRayBuffer.device;
-				rt_raygenDataBuffer.copy(rt_raygenData);
-				rt_hitDatas[RayRadiance].data.cameraRayDatas = (CameraRayData*)cameraRayBuffer.device;
-				rt_hitDatas[ShadowRay].data.cameraRayDatas = (CameraRayData*)cameraRayBuffer.device;
-				rt_hitDataBuffer.copy(rt_hitDatas, sizeof(rt_hitDatas));
-				rt_raygenDataBuffer.unmap();
-				rt_hitDataBuffer.unmap();
 			}
 			void terminate()
 			{
@@ -473,17 +383,17 @@ namespace CUDA
 				printf("bbmax:(%f,%f,%f)\n", bbmax.x, bbmax.y, bbmax.z);*/
 
 				// specify the grid size
-				paras.gridSize.x = (int)ceilf((bbmax.x - bbmin.x) / HASH_GRID_SIDELENGTH) + 2;
-				paras.gridSize.y = (int)ceilf((bbmax.y - bbmin.y) / HASH_GRID_SIDELENGTH) + 2;
-				paras.gridSize.z = (int)ceilf((bbmax.z - bbmin.z) / HASH_GRID_SIDELENGTH) + 2;
+				paras.gridSize.x = (int)ceilf((bbmax.x - bbmin.x) / COLLECT_RAIDUS) + 2;
+				paras.gridSize.y = (int)ceilf((bbmax.y - bbmin.y) / COLLECT_RAIDUS) + 2;
+				paras.gridSize.z = (int)ceilf((bbmax.z - bbmin.z) / COLLECT_RAIDUS) + 2;
 				/*printf("gridSize:(%d,%d,%d)\n", paras.gridSize.x, paras.gridSize.y, paras.gridSize.z);*/
 
 				// specify the world origin
-				paras.gridOrigin.x = bbmin.x - HASH_GRID_SIDELENGTH;
-				paras.gridOrigin.y = bbmin.y - HASH_GRID_SIDELENGTH;
-				paras.gridOrigin.z = bbmin.z - HASH_GRID_SIDELENGTH;
-				/*printf("gridOrigin:(%f,%f,%f)\n", paras.gridOrigin.x, paras.gridOrigin.y, paras.gridOrigin.z);
-*/
+				paras.gridOrigin.x = bbmin.x - COLLECT_RAIDUS;
+				paras.gridOrigin.y = bbmin.y - COLLECT_RAIDUS;
+				paras.gridOrigin.z = bbmin.z - COLLECT_RAIDUS;
+				printf("gridOrigin:(%f,%f,%f)\n", paras.gridOrigin.x, paras.gridOrigin.y, paras.gridOrigin.z);
+
 				parasBuffer.copy(paras);
 
 				// compute hash value
@@ -493,17 +403,15 @@ namespace CUDA
 				// sort according to hash value
 				qsort(tempPhotons, 0, validPhotonCnt);
 
+				for (int i = 0; i < validPhotonCnt; i++)
+					Photon& photon = *tempPhotons[i].pointer;
+
 				// create neighbour offset lookup table
 				int* NOLTDatas = new int[9];
 				float3 offset[9] = { {-1,-1,-1},{-1,0,-1},{-1,1,-1},{-1,-1,0},{-1,0,0},{-1,1,0},{-1,-1,1},{-1,0,1},{-1,1,1} };
 				for (int c0(0); c0 < 9; c0++)
 					NOLTDatas[c0] = offset[c0].z * paras.gridSize.x * paras.gridSize.y + offset[c0].y * paras.gridSize.x + offset[c0].x;
-
-#ifdef OPTIX_GATHER
 				NOLT.copy(NOLTDatas, sizeof(int) * 9);
-#else if CUDA_GATHER
-				initNOLT(NOLTDatas);
-#endif
 				delete[] NOLTDatas;
 
 				// reorder to build the photonMap
@@ -537,7 +445,7 @@ namespace CUDA
 							startIdxs[i++] = j;
 					}
 				}
-				photonMapStartIdxs.copy(startIdxs, sizeof(int) * (gridCnt + 1));
+				photonMapStartIdxs.copy(startIdxs, sizeof(int)* (gridCnt + 1));
 
 				/*int emptyCnt = 0;
 				for (int i = 0; i < gridCnt; i++)
@@ -585,7 +493,7 @@ namespace OpenGL
 			sm(),
 			renderer(&sm, _size),
 			//test(CUDA::Buffer::Device, 4),
-			trans({ {60},{0.01,0.9,0.005},{0.006},{0,0,5.0f},1400.0 }),
+			trans({ {60},{0.01,0.9,0.005},{0.006},{0,0,5.0},1400.0 }),
 			pathTracer(&sm, &renderer, _size, trans.buffer.device),
 			size(_size),
 			frameSizeChanged(false)
