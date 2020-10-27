@@ -86,7 +86,7 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 
 		indirectFlux /= M_PIf * COLLECT_RAIDUS * COLLECT_RAIDUS * (1.0f - 0.6667f / 1.0f) * PT_PHOTON_CNT;
 
-		paras.image[index] = make_float4(indirectFlux, 1.0f);
+		paras.image[index] += make_float4(indirectFlux, 1.0f);
 
 #ifdef USE_CONNECTRAY
 		if (paras.eye == LeftEye && paras.c_index[index] != -1)

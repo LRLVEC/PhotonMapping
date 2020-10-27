@@ -176,7 +176,7 @@ extern "C" __global__ void __closesthit__RayRadiance()
 
 		float3 color = indirectFlux;
 #else
-		float3 color = 0.1f * directFlux;
+		float3 color = 0.04f * directFlux;
 #endif
 		//color = 0.1f * directFlux;
 		paras.image[index.y * paras.size.x + index.x] = make_float4(color, 1.0f);

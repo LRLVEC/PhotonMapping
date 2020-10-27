@@ -126,7 +126,7 @@ namespace CUDA
 				c_imageBuffer(Buffer::Device),
 				c_indexBuffer(Buffer::Device),
 				parasBuffer(paras, false),
-				box(_sourceManager->folder.find("resources/teapotnew.stl").readSTL()),
+				box(_sourceManager->folder.find("resources/boxnew.stl").readSTL()),
 				vertices(Buffer::Device),
 				normals(Buffer::Device),
 				kds(Buffer::Device),
@@ -148,10 +148,14 @@ namespace CUDA
 				float3* kdsTemp = new float3[box.normals.length];
 				for (int c0(0); c0 < box.normals.length; c0++)
 					kdsTemp[c0] = { 0.73f, 0.73f, 0.73f };
-				kdsTemp[box.normals.length - 6] = make_float3(0.65f, 0.05f, 0.05f);
-				kdsTemp[box.normals.length - 5] = make_float3(0.65f, 0.05f, 0.05f);
-				kdsTemp[box.normals.length - 10] = make_float3(0.12f, 0.45f, 0.15f);
-				kdsTemp[box.normals.length - 9] = make_float3(0.12f, 0.45f, 0.15f);
+				kdsTemp[20] = make_float3(0.65f, 0.05f, 0.05f);
+				kdsTemp[21] = make_float3(0.65f, 0.05f, 0.05f);
+				kdsTemp[24] = make_float3(0.12f, 0.45f, 0.15f);
+				kdsTemp[25] = make_float3(0.12f, 0.45f, 0.15f);
+				//kdsTemp[box.normals.length - 6] = make_float3(0.65f, 0.05f, 0.05f);
+				//kdsTemp[box.normals.length - 5] = make_float3(0.65f, 0.05f, 0.05f);
+				//kdsTemp[box.normals.length - 10] = make_float3(0.12f, 0.45f, 0.15f);
+				//kdsTemp[box.normals.length - 9] = make_float3(0.12f, 0.45f, 0.15f);
 				kds.copy(kdsTemp, sizeof(float3)* box.normals.length);
 				delete[] kdsTemp;
 
