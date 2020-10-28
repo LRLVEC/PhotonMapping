@@ -37,6 +37,7 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 	__shared__ Photon photons[BLOCK_SIZE2];
 	__shared__ int flag;
 
+
 	flag = 0;
 
 	if (primIdx != -1)
@@ -52,16 +53,18 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 	__syncthreads();
 	*/
 
-	if (primIdx == -1)
+
+	if (primIdx == -1)	// 没有和场景相交，黑色
 	{
 		paras.image[index] = make_float4(0.0f, 0.0f, 0.0f, 1.0f);
 		return;
 	}
 	
-#ifdef USE_SHARED_MEMORY
-	if (flag != 0)	// at leasy one thread hit a different hash box 
-#endif
+//#ifdef USE_SHARED_MEMORY
+//	if (flag != 0)	// at leasy one thread hit a different hash box 
+//#endif
 	{
+		// 以下是计算间接光照
 		int hitPointHashValue = hash(hitPointPosition);
 
 		float3 indirectFlux = make_float3(0.0f, 1.0f, 0.0f);
@@ -89,13 +92,13 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 
 		paras.image[index] += make_float4(indirectFlux, 1.0f);
 
-#ifdef USE_CONNECTRAY
-		if (paras.eye == LeftEye && paras.c_index[index] != -1)
+//#ifdef USE_CONNECTRAY
+		if (paras.eye == LeftEye && paras.c_index[index] != -1)	// 左眼把间接光照丢到右眼
 			paras.c_image[paras.c_index[index]] = indirectFlux;
-#endif
+//#endif
 		//paras.image[index] = make_float4(1.0f, 0.0f, 0.0f, 1.0f);
 	}
-#ifdef USE_SHARED_MEMORY
+/*#ifdef USE_SHARED_MEMORY
 	else	// all thread hit the same hash box
 	{
 		float3 indirectFlux = make_float3(0.0f, 0.0f, 0.0f);
@@ -150,6 +153,7 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 		//paras.image[index] = make_float4(0.0f, 0.0f, 1.0f, 1.0f);
 	}
 #endif
+*/
 }
 
 void initNOLT(int* NOLT_host)
