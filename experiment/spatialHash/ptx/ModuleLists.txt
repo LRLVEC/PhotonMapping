@@ -1,0 +1,11 @@
+Program:	Draw
+{
+	__raygen__RayAllocator
+	__closesthit__RayRadiance
+	__closesthit__ShadowRay
+	__miss__RayRadiance
+	__miss__ShadowRay
+	__miss__Ahh
+	__raygen__PhotonEmit
+	__closesthit__PhotonHit
+}
