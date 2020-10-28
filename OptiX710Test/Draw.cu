@@ -81,6 +81,8 @@ extern "C" __global__ void __closesthit__RayRadiance()
 
 	if (fmaxf(hitPointKd) > 0.0f)
 	{
+		
+
 		// record cameraRay info
 		CameraRayData& cameraRayData = hitData->cameraRayDatas[index.y * paras.size.x + index.x];
 		cameraRayData.position = hitPointPosition;
@@ -164,7 +166,7 @@ extern "C" __global__ void __closesthit__RayRadiance()
 				float3 diff = hitPointPosition - photon.position;
 				float distance = sqrtf(dot(diff, diff));
 
-				if (distance <= COLLECT_RAIDUS && fabsf(dot(diff, hitPointNormal)) < 0.0001f)
+				if (distance <= COLLECT_RAIDUS)// && fabsf(dot(diff, hitPointNormal)) < 0.0001f)
 				{
 					float Wpc = 1.0f - distance / COLLECT_RAIDUS;
 					indirectFlux += photon.energy * hitPointKd * Wpc;
@@ -176,10 +178,10 @@ extern "C" __global__ void __closesthit__RayRadiance()
 
 		float3 color = indirectFlux;
 #else
-		float3 color = 0.1f * directFlux;
+		float3 color = 0.05f * directFlux;
 #endif
 		//color = 0.1f * directFlux;
-		paras.image[index.y * paras.size.x + index.x] = make_float4(color, 1.0f);
+		paras.image[index.y * paras.size.x + index.x] = make_float4(color, 0.0f);
 
 #ifdef USE_CONNECTRAY
 		int c_index = paras.c_index[index.y * paras.size.x + index.x];

@@ -130,7 +130,7 @@ struct Parameters
 	eyeType eye;
 };
 
-#define COLLECT_RAIDUS 0.2f
+#define COLLECT_RAIDUS 0.15f
 #define HASH_GRID_SIDELENGTH COLLECT_RAIDUS
 
 #define hash(position) ((int)floorf((position.z - paras.gridOrigin.z) / HASH_GRID_SIDELENGTH)) * paras.gridSize.x * paras.gridSize.y \

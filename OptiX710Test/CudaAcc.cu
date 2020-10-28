@@ -33,7 +33,7 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 	float3 normal = normals[primIdx];
 	float3 kd = kds[primIdx];
 
-	__shared__ int hashValues[BLOCK_SIZE2];
+	/*__shared__ int hashValues[BLOCK_SIZE2];
 	__shared__ Photon photons[BLOCK_SIZE2];
 	__shared__ int flag;
 
@@ -50,6 +50,7 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 		flag = 1;
 
 	__syncthreads();
+	*/
 
 	if (primIdx == -1)
 	{
@@ -76,7 +77,7 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 				float3 diff = hitPointPosition - photon.position;
 				float distance2 = dot(diff, diff);
 
-				if (distance2 <= COLLECT_RAIDUS * COLLECT_RAIDUS && fabsf(dot(diff,normal)) < 0.0001f)
+				if (distance2 <= COLLECT_RAIDUS * COLLECT_RAIDUS)// && fabsf(dot(diff,normal)) < 0.0001f)
 				{
 					float Wpc = 1.0f - sqrtf(distance2) / COLLECT_RAIDUS;
 					indirectFlux += photon.energy * kd * Wpc;
@@ -86,7 +87,7 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 
 		indirectFlux /= M_PIf * COLLECT_RAIDUS * COLLECT_RAIDUS * (1.0f - 0.6667f / 1.0f) * PT_PHOTON_CNT;
 
-		paras.image[index] = make_float4(indirectFlux, 1.0f);
+		paras.image[index] += make_float4(indirectFlux, 1.0f);
 
 #ifdef USE_CONNECTRAY
 		if (paras.eye == LeftEye && paras.c_index[index] != -1)

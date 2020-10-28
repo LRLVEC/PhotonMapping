@@ -353,10 +353,11 @@ BB0_15:
 	fma.rn.f32 	%f41, %f22, %f7, %f40;
 	fma.rn.f32 	%f42, %f24, %f9, %f41;
 	mul.f32 	%f43, %f42, %f39;
-	mov.f32 	%f75, 0f00000000;
+	mov.f32 	%f33, 0f00000000;
 	setp.geu.f32	%p2, %f43, 0f00000000;
-	mov.f32 	%f76, %f75;
-	mov.f32 	%f77, %f75;
+	mov.f32 	%f75, %f33;
+	mov.f32 	%f76, %f33;
+	mov.f32 	%f77, %f33;
 	@%p2 bra 	BB1_3;
 
 	mul.f32 	%f53, %f14, %f14;
@@ -397,17 +398,16 @@ BB0_15:
 	mul.f32 	%f71, %f60, %f68;
 	mul.f32 	%f72, %f60, %f69;
 	mul.f32 	%f73, %f60, %f70;
-	mul.f32 	%f75, %f71, 0f3DCCCCCD;
-	mul.f32 	%f76, %f72, 0f3DCCCCCD;
-	mul.f32 	%f77, %f73, 0f3DCCCCCD;
+	mul.f32 	%f75, %f71, 0f3D4CCCCD;
+	mul.f32 	%f76, %f72, 0f3D4CCCCD;
+	mul.f32 	%f77, %f73, 0f3D4CCCCD;
 
 BB1_3:
 	ld.const.u64 	%rd18, [paras];
 	cvta.to.global.u64 	%rd19, %rd18;
 	shl.b64 	%rd20, %rd3, 4;
 	add.s64 	%rd21, %rd19, %rd20;
-	mov.f32 	%f74, 0f3F800000;
-	st.global.v4.f32 	[%rd21], {%f75, %f76, %f77, %f74};
+	st.global.v4.f32 	[%rd21], {%f75, %f76, %f77, %f33};
 
 BB1_4:
 	ret;
