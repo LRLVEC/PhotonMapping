@@ -157,6 +157,32 @@ namespace CUDA
 				////kdsTemp[box.normals.length - 10] = make_float3(0.12f, 0.45f, 0.15f);
 				////kdsTemp[box.normals.length - 9] = make_float3(0.12f, 0.45f, 0.15f);
 				//kds.copy(kdsTemp, sizeof(float3)* box.normals.length);
+#ifdef CBOX
+				int triangleCnt = 0;
+				STL box(_sourceManager->folder.find("resources/boxnew.stl").readSTL());
+				box.getVerticesRepeated();
+				box.getNormals();
+				triangleCnt += box.normals.length;
+				vertices.copy(box.verticesRepeated.data, sizeof(Math::vec3<float>)* box.verticesRepeated.length);
+				normals.copy(box.normals.data, sizeof(Math::vec3<float>)* box.normals.length);
+
+				float3* kdsTemp = new float3[triangleCnt];
+				for (int c0(0); c0 < triangleCnt; c0++)
+					kdsTemp[c0] = { 0.73f, 0.73f, 0.73f };
+				kdsTemp[box.normals.length - 6] = make_float3(0.12f, 0.45f, 0.15f);
+				kdsTemp[box.normals.length - 5] = make_float3(0.12f, 0.45f, 0.15f);
+				kdsTemp[box.normals.length - 10] = make_float3(0.65f, 0.05f, 0.05f);
+				kdsTemp[box.normals.length - 9] = make_float3(0.65f, 0.05f, 0.05f);
+
+				lightSource[0].position = { 0.0f, 0.99f, 0.0f };
+				float lightPower = 10.f;
+				lightSource[0].power = { lightPower, lightPower, lightPower };
+				lightSource[0].direction = { 0.0f, -1.0f, 0.0f };
+				lightSource[0].visiableAngle = -1;
+				lightSource[0].accumulatePower = lightSource[0].power.x * 0.299f +
+					lightSource[0].power.y * 0.587f + lightSource[0].power.z * 0.114f;
+				paras.lightSourceNum = 1;
+#else
 				const char name[10][40] = { "resources/room/0.stl", "resources/room/1.stl",
 					"resources/room/2.stl", "resources/room/3.stl", "resources/room/4.stl", "resources/room/5.stl",
 					"resources/room/6.stl", "resources/room/7.stl", "resources/room/8.stl", "resources/room/9.stl" };
@@ -204,16 +230,6 @@ namespace CUDA
 					currentCnt += boxs[i]->normals.length;
 				}
 
-				/*for (int c0(0); c0 < triangleCnt; c0++)
-					kdsTemp[c0] = { 0.73f, 0.73f, 0.73f };*/
-					/*kdsTemp[box.normals.length - 6] = make_float3(0.12f, 0.45f, 0.15f);
-					kdsTemp[box.normals.length - 5] = make_float3(0.12f, 0.45f, 0.15f);
-					kdsTemp[box.normals.length - 10] = make_float3(0.65f, 0.05f, 0.05f);
-					kdsTemp[box.normals.length - 9] = make_float3(0.65f, 0.05f, 0.05f);*/
-
-				kds.copy(kdsTemp, sizeof(float3)* triangleCnt);
-				delete[] kdsTemp;
-
 				lightSource[0].position = { 0.0f, 2.5f, 0.0f };
 				float lightPower = 12.f;
 				lightSource[0].power = { lightPower, 0.8164f * lightPower, 0.53125f * lightPower };
@@ -250,12 +266,15 @@ namespace CUDA
 					lightSource[2].accumulatePower;
 
 				paras.lightSourceNum = 4;
-
+#endif
 				/*lightSource.type = LightSource::SPOT;
 				lightSource.position = { 0.0f,-0.25f,0.0f };
 				lightSource.power = { 1.0f, 1.0f, 1.0f };*/
 
 				lightSourceBuffer.copy(lightSource);
+
+				kds.copy(kdsTemp, sizeof(float3)* triangleCnt);
+				delete[] kdsTemp;
 
 				uint32_t triangle_input_flags[1] =  // One per SBT record for this build input
 				{
@@ -676,7 +695,11 @@ namespace OpenGL
 			sm(),
 			renderer(&sm, _size),
 			//test(CUDA::Buffer::Device, 4),
-			trans({ {60},{0.01,0.9,0.005},{0.006},{0,1.f,3.0f},1400.0 }),
+#ifdef CBOX
+			trans({ {60},{0.01,0.9,0.005},{0.006},{0,0.f,5.0f},1400.0 }),//box
+#else
+			trans({ {60},{0.01,0.9,0.005},{0.006},{0,1.f,3.0f},1400.0 }),//office
+#endif
 			//trans({ {60},{0.01,0.9,0.005},{0.006},{-0.933f,0.4f,-0.174},1400.0 }),//chair
 			pathTracer(&sm, &renderer, _size, trans.buffer.device),
 			size(_size),

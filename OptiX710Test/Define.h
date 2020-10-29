@@ -149,3 +149,5 @@ struct Parameters
 #define USE_SHARED_MEMORY
 
 //#define USE_CONNECTRAY
+
+//#define CBOX

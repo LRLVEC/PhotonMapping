@@ -157,7 +157,7 @@ extern "C" __global__ void __closesthit__RayRadiance()
 				float3 diff = hitPointPosition - photon.position;
 				float distance2 = dot(diff, diff);
 
-				if (distance2 <= radius2 && fabsf(dot(diff, hitPointNormal)) < 0.0001f)
+				if (distance2 <= radius2)// && fabsf(dot(diff, hitPointNormal)) < 0.0001f)
 					heap.push(distance2, c1);
 			}
 		}
