@@ -110,7 +110,7 @@ namespace CUDA
 			CUstream cuStream;
 			Parameters paras;
 			Buffer parasBuffer;
-			STL box;
+			//STL box;
 			Buffer vertices;
 			Buffer normals;
 			Buffer kds;
@@ -165,7 +165,7 @@ namespace CUDA
 				pt_sbt({}),
 				frameBuffer(*dr),
 				parasBuffer(paras, false),
-				box(_sourceManager->folder.find("resources/boxnew.stl").readSTL()),
+				//box(_sourceManager->folder.find("resources/boxnew.stl").readSTL()),
 				vertices(Buffer::Device),
 				normals(Buffer::Device),
 				kds(Buffer::Device),
@@ -176,20 +176,79 @@ namespace CUDA
 				GASHandle(0),
 				photonFlag(true)
 			{
-				box.getVerticesRepeated();
-				box.getNormals();
-				box.printInfo(false);
-				vertices.copy(box.verticesRepeated.data, sizeof(Math::vec3<float>)* box.verticesRepeated.length);
-				normals.copy(box.normals.data, sizeof(Math::vec3<float>)* box.normals.length);
+				/*box.getVerticesRepeated();
+box.getNormals();
+box.printInfo(false);
+vertices.copy(box.verticesRepeated.data, sizeof(Math::vec3<float>)* box.verticesRepeated.length);
+normals.copy(box.normals.data, sizeof(Math::vec3<float>)* box.normals.length);*/
 
-				float3* kdsTemp = new float3[box.normals.length];
-				for (int c0(0); c0 < box.normals.length; c0++)
-					kdsTemp[c0] = { 0.73f, 0.73f, 0.73f };
-				kdsTemp[20] = make_float3(0.65f, 0.05f, 0.05f);
-				kdsTemp[21] = make_float3(0.65f, 0.05f, 0.05f);
-				kdsTemp[24] = make_float3(0.12f, 0.45f, 0.15f);
-				kdsTemp[25] = make_float3(0.12f, 0.45f, 0.15f);
-				kds.copy(kdsTemp, sizeof(float3)* box.normals.length);
+//float3* kdsTemp = new float3[box.normals.length];
+//for (int c0(0); c0 < box.normals.length; c0++)
+//	kdsTemp[c0] = { 0.73f, 0.73f, 0.73f };
+//kdsTemp[20] = make_float3(0.65f, 0.05f, 0.05f);
+//kdsTemp[21] = make_float3(0.65f, 0.05f, 0.05f);
+//kdsTemp[24] = make_float3(0.12f, 0.45f, 0.15f);
+//kdsTemp[25] = make_float3(0.12f, 0.45f, 0.15f);
+////kdsTemp[box.normals.length - 6] = make_float3(0.65f, 0.05f, 0.05f);
+////kdsTemp[box.normals.length - 5] = make_float3(0.65f, 0.05f, 0.05f);
+////kdsTemp[box.normals.length - 10] = make_float3(0.12f, 0.45f, 0.15f);
+////kdsTemp[box.normals.length - 9] = make_float3(0.12f, 0.45f, 0.15f);
+//kds.copy(kdsTemp, sizeof(float3)* box.normals.length);
+				const char name[10][40] = { "resources/room/0.stl", "resources/room/1.stl",
+					"resources/room/2.stl", "resources/room/3.stl", "resources/room/4.stl", "resources/room/5.stl",
+					"resources/room/6.stl", "resources/room/7.stl", "resources/room/8.stl", "resources/room/9.stl" };
+
+				STL* boxs[10] = { NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL };
+				int triangleCnt = 0;
+				for (int i = 0; i < 10; i++)
+				{
+					boxs[i] = new STL(_sourceManager->folder.find(name[i]).readSTL());
+					boxs[i]->getVerticesRepeated();
+					boxs[i]->getNormals();
+					triangleCnt += boxs[i]->normals.length;
+				}
+
+				::printf("Triangle count: %llu\n", triangleCnt);
+				vertices.resize(sizeof(float3) * 3 * triangleCnt);
+				normals.resize(sizeof(float3)* triangleCnt);
+
+				int currentCnt = 0;
+				for (int i = 0; i < 10; i++)
+				{
+					cudaMemcpy((float3*)vertices.device + currentCnt * 3, boxs[i]->verticesRepeated.data, sizeof(float3) * boxs[i]->verticesRepeated.length, cudaMemcpyHostToDevice);
+					cudaMemcpy((float3*)normals.device + currentCnt, boxs[i]->normals.data, sizeof(float3) * boxs[i]->normals.length, cudaMemcpyHostToDevice);
+					currentCnt += boxs[i]->normals.length;
+				}
+
+				float3 sceneColor[10]{ {0.16f, 0.14f, 0.13f},	// 键盘、屏幕：象牙黑
+					{0.70f, 0.09f, 0.12f},	// 书本：印度红
+					{0.98f, 1.0f, 0.94f},	// 陶瓷：象牙白
+					{0.69f, 0.88f, 0.9f},	// 坐垫：浅灰蓝色
+					{0.37f, 0.15f, 0.07f},	// 桌面：乌贼墨棕
+					{0.75f, 0.75f, 0.75f},	// 金属：灰色
+					{0.5f, 0.54f, 0.53f},	// 支柱：冷灰
+					{0.73f, 0.73f, 0.73f},	// 屋子整体
+					{1.0f, 0.5f, 0.0f},		// 柜子：桔黄
+					{0.12f, 0.45f, 0.15f}	// 文件：绿色
+				};
+
+				float3* kdsTemp = new float3[triangleCnt];
+				currentCnt = 0;
+				for (int i = 0; i < 10; i++)
+				{
+					for (int j = 0; j < boxs[i]->normals.length; j++)
+						kdsTemp[currentCnt + j] = sceneColor[i];
+					currentCnt += boxs[i]->normals.length;
+				}
+
+				/*for (int c0(0); c0 < triangleCnt; c0++)
+					kdsTemp[c0] = { 0.73f, 0.73f, 0.73f };*/
+					/*kdsTemp[box.normals.length - 6] = make_float3(0.12f, 0.45f, 0.15f);
+					kdsTemp[box.normals.length - 5] = make_float3(0.12f, 0.45f, 0.15f);
+					kdsTemp[box.normals.length - 10] = make_float3(0.65f, 0.05f, 0.05f);
+					kdsTemp[box.normals.length - 9] = make_float3(0.65f, 0.05f, 0.05f);*/
+
+				kds.copy(kdsTemp, sizeof(float3)* triangleCnt);
 				delete[] kdsTemp;
 
 				lightSource.position = { 0.0f, 0.99f, 0.0f };
@@ -212,7 +271,7 @@ namespace CUDA
 				triangleBuildInput.type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
 				triangleBuildInput.triangleArray.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
 				//triangleBuildInput.triangleArray.vertexStrideInBytes = sizeof(Math::vec3<float>);
-				triangleBuildInput.triangleArray.numVertices = box.verticesRepeated.length;
+				triangleBuildInput.triangleArray.numVertices = triangleCnt * 3;
 				triangleBuildInput.triangleArray.vertexBuffers = (CUdeviceptr*)& vertices.device;
 				triangleBuildInput.triangleArray.flags = triangle_input_flags;
 				triangleBuildInput.triangleArray.numSbtRecords = 1;
@@ -570,7 +629,7 @@ namespace OpenGL
 			sm(),
 			renderer(&sm, _size),
 			//test(CUDA::Buffer::Device, 4),
-			trans({ {60},{0.01,0.9,0.005},{0.006},{0,0,5.0},1400.0 }),
+			trans({ {60},{0.01,0.9,0.005},{0.006},{0,1.f,3.0f},1400.0 }),
 			pathTracer(&sm, &renderer, _size, trans.buffer.device),
 			size(_size),
 			frameSizeChanged(false)
@@ -690,8 +749,8 @@ int main()
 		wm.render();
 		wm.swapBuffers();
 		fps.refresh();
-		//fps.printFPSAndFrameTime(2, 3);
-		fps.printAverageFrameTime();
+		fps.printFPSAndFrameTime(2, 3);
+		//fps.printAverageFrameTime();
 		//wm.windows[0].data.setTitle(fps.str);
 	}
 	return 1;
