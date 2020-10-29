@@ -35,7 +35,9 @@ struct RayData
 struct LightSource
 {
 	float3 position;
+	float accumulatePower;
 	float3 power;
+	float visiableAngle;//dot(direction, shadowRayDir) > visiableAngle
 	float3 direction;
 };
 
@@ -96,7 +98,7 @@ struct Rt_HitData
 	CameraRayData* cameraRayDatas;
 };
 
-#define PT_PHOTON_CNT ( 1 << 16 )
+#define PT_PHOTON_CNT ( 1 << 18 )
 #define PT_MAX_DEPTH 8
 #define PT_MAX_DEPOSIT 8
 
@@ -128,9 +130,10 @@ struct Parameters
 	float3 gridOrigin;
 	int3 gridSize;
 	eyeType eye;
+	unsigned int lightSourceNum;
 };
 
-#define COLLECT_RAIDUS 0.2f
+#define COLLECT_RAIDUS 0.15f
 #define HASH_GRID_SIDELENGTH COLLECT_RAIDUS
 
 #define hash(position) ((int)floorf((position.z - paras.gridOrigin.z) / HASH_GRID_SIDELENGTH)) * paras.gridSize.x * paras.gridSize.y \

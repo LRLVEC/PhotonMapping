@@ -33,23 +33,26 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 	float3 normal = normals[primIdx];
 	float3 kd = kds[primIdx];
 
-	//__shared__ int hashValues[BLOCK_SIZE2];
-	//__shared__ Photon photons[BLOCK_SIZE2];
-	//__shared__ int flag;
+	/*__shared__ int hashValues[BLOCK_SIZE2];
+	__shared__ Photon photons[BLOCK_SIZE2];
+	__shared__ int flag;
 
-	//flag = 0;
 
-	//if (primIdx != -1)
-	//	hashValues[tid] = hash(hitPointPosition);
-	//else
-	//	hashValues[tid] = -1;
+	flag = 0;
 
-	//__syncthreads();
+	if (primIdx != -1)
+		hashValues[tid] = hash(hitPointPosition);
+	else
+		hashValues[tid] = -1;
 
-	//if (hashValues[tid] != hashValues[(tid + 1) % BLOCK_SIZE2])
-	//	flag = 1;
+	__syncthreads();
 
-	//__syncthreads();
+	if (hashValues[tid] != hashValues[(tid + 1) % BLOCK_SIZE2])
+		flag = 1;
+
+	__syncthreads();
+	*/
+
 
 	if (primIdx == -1)	// 没有和场景相交，黑色
 	{
@@ -77,7 +80,7 @@ extern "C" __global__ void GatherKernel(CameraRayData* cameraRayDatas, Photon* p
 				float3 diff = hitPointPosition - photon.position;
 				float distance2 = dot(diff, diff);
 
-				if (distance2 <= COLLECT_RAIDUS * COLLECT_RAIDUS && fabsf(dot(diff,normal)) < 0.0001f)
+				if (distance2 <= COLLECT_RAIDUS * COLLECT_RAIDUS)// && fabsf(dot(diff,normal)) < 0.0001f)
 				{
 					float Wpc = 1.0f - sqrtf(distance2) / COLLECT_RAIDUS;
 					indirectFlux += photon.energy * kd * Wpc;

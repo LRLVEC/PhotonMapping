@@ -5,5 +5,5 @@ out vec4 o_color;
 void main()
 {
 	vec4 ahh = texture(texSmp, texCood);
-	o_color = ahh;
+	o_color = tanh(ahh);
 }

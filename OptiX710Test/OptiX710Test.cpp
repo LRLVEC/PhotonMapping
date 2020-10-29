@@ -45,7 +45,7 @@ namespace CUDA
 			SbtRecord<Rt_HitData> rt_hitDatas[RayCount];
 			SbtRecord<Pt_RayGenData> pt_raygenData;
 			SbtRecord<Pt_HitData> pt_hitData;
-			LightSource lightSource;
+			LightSource lightSource[4];
 			Buffer lightSourceBuffer;
 			Buffer cameraRayBuffer;
 			Buffer photonBuffer;
@@ -64,7 +64,7 @@ namespace CUDA
 			CUstream cuStream;
 			Parameters paras;
 			Buffer parasBuffer;
-			STL box;
+			//STL box;
 			Buffer vertices;
 			Buffer normals;
 			Buffer kds;
@@ -83,86 +83,173 @@ namespace CUDA
 					OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
 					OPTIX_COMPILE_OPTIMIZATION_LEVEL_3,
 					OPTIX_COMPILE_DEBUG_LEVEL_NONE },
-				pt_moduleCompileOptions{
-					OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-					OPTIX_COMPILE_OPTIMIZATION_LEVEL_3,
-					OPTIX_COMPILE_DEBUG_LEVEL_NONE },
-				rt_pipelineCompileOptions{ false,
-					OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
-					8,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },//OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE: new in OptiX7.1.0
-				pt_pipelineCompileOptions{ false,
-					OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
-					8,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },
-				mm(&_sourceManager->folder, context, &rt_moduleCompileOptions, &rt_pipelineCompileOptions),
-				rt_programGroupOptions{},
-				pt_programGroupOptions{},
-				pt_miss(Vector<String<char>>("__miss__Ahh"), Program::Miss, &rt_programGroupOptions, context, &mm),
-				rt_raygen(Vector<String<char>>("__raygen__RayAllocator"), Program::RayGen, &rt_programGroupOptions, context, &mm),
-				rt_hitRayRadiance(Vector<String<char>>("__closesthit__RayRadiance"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
-				rt_hitShadowRay(Vector<String<char>>("__closesthit__ShadowRay"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
-				rt_hitConnectRay(Vector<String<char>>("__closesthit__ConnectRay"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
-				rt_missRayRadiance(Vector<String<char>>("__miss__RayRadiance"), Program::Miss, &rt_programGroupOptions, context, &mm),
-				rt_missShadowRay(Vector<String<char>>("__miss__ShadowRay"), Program::Miss, &rt_programGroupOptions, context, &mm),
-				rt_missConnectRay(Vector<String<char>>("__miss__ConnectRay"), Program::Miss, &rt_programGroupOptions, context, &mm),
-				pt_raygen(Vector<String<char>>("__raygen__PhotonEmit"), Program::RayGen, &pt_programGroupOptions, context, &mm),
-				pt_closestHit(Vector<String<char>>("__closesthit__PhotonHit"), Program::HitGroup, &pt_programGroupOptions, context, &mm),
-				rt_pipelineLinkOptions{ 1,OPTIX_COMPILE_DEBUG_LEVEL_NONE },//no overrideUsesMotionBlur in OptiX7.1.0
-				pt_pipelineLinkOptions{ 10,OPTIX_COMPILE_DEBUG_LEVEL_NONE }, // NOTE: maxDepth = 10 in photon trace stage
-				rt_pip(context, &rt_pipelineCompileOptions, &rt_pipelineLinkOptions, { rt_raygen ,rt_hitRayRadiance, rt_hitShadowRay, rt_hitConnectRay, rt_missRayRadiance, rt_missShadowRay, rt_missConnectRay }),
-				pt_pip(context, &pt_pipelineCompileOptions, &pt_pipelineLinkOptions, { pt_raygen ,pt_closestHit, pt_miss }),
-				lightSourceBuffer(lightSource, false),
-				cameraRayBuffer(Buffer::Device),
-				photonBuffer(Buffer::Device),
-				photonMapBuffer(Buffer::Device),
-				pt_missDataBuffer(Buffer::Device),
-				rt_raygenDataBuffer(rt_raygenData, false),
-				rt_hitDataBuffer(Buffer::Device),
-				rt_missDataBuffer(Buffer::Device),
-				pt_raygenDataBuffer(pt_raygenData, false),
-				pt_hitDataBuffer(pt_hitData, false),
-				rt_sbt({}),
-				pt_sbt({}),
-				frameBuffer(*dr),
-				c_imageBuffer(Buffer::Device),
-				c_indexBuffer(Buffer::Device),
-				parasBuffer(paras, false),
-				box(_sourceManager->folder.find("resources/boxnew.stl").readSTL()),
-				vertices(Buffer::Device),
-				normals(Buffer::Device),
-				kds(Buffer::Device),
-				NOLT(Buffer::Device),
-				photonMapStartIdxs(Buffer::Device),
-				debugDatas(Buffer::Device),
-				triangleBuildInput({}),
-				accelOptions({}),
-				GASOutput(Buffer::Device),
-				GASHandle(0),
-				photonFlag(true)
+					pt_moduleCompileOptions{
+						OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+						OPTIX_COMPILE_OPTIMIZATION_LEVEL_3,
+						OPTIX_COMPILE_DEBUG_LEVEL_NONE },
+						rt_pipelineCompileOptions{ false,
+							OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
+							8,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },//OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE: new in OptiX7.1.0
+							pt_pipelineCompileOptions{ false,
+								OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS,
+								8,2,OPTIX_EXCEPTION_FLAG_NONE,"paras", unsigned int(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE) },
+								mm(&_sourceManager->folder, context, &rt_moduleCompileOptions, &rt_pipelineCompileOptions),
+								rt_programGroupOptions{},
+								pt_programGroupOptions{},
+								pt_miss(Vector<String<char>>("__miss__Ahh"), Program::Miss, &rt_programGroupOptions, context, &mm),
+								rt_raygen(Vector<String<char>>("__raygen__RayAllocator"), Program::RayGen, &rt_programGroupOptions, context, &mm),
+								rt_hitRayRadiance(Vector<String<char>>("__closesthit__RayRadiance"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
+								rt_hitShadowRay(Vector<String<char>>("__closesthit__ShadowRay"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
+								rt_hitConnectRay(Vector<String<char>>("__closesthit__ConnectRay"), Program::HitGroup, &rt_programGroupOptions, context, &mm),
+								rt_missRayRadiance(Vector<String<char>>("__miss__RayRadiance"), Program::Miss, &rt_programGroupOptions, context, &mm),
+								rt_missShadowRay(Vector<String<char>>("__miss__ShadowRay"), Program::Miss, &rt_programGroupOptions, context, &mm),
+								rt_missConnectRay(Vector<String<char>>("__miss__ConnectRay"), Program::Miss, &rt_programGroupOptions, context, &mm),
+								pt_raygen(Vector<String<char>>("__raygen__PhotonEmit"), Program::RayGen, &pt_programGroupOptions, context, &mm),
+								pt_closestHit(Vector<String<char>>("__closesthit__PhotonHit"), Program::HitGroup, &pt_programGroupOptions, context, &mm),
+								rt_pipelineLinkOptions{ 1,OPTIX_COMPILE_DEBUG_LEVEL_NONE },//no overrideUsesMotionBlur in OptiX7.1.0
+								pt_pipelineLinkOptions{ 10,OPTIX_COMPILE_DEBUG_LEVEL_NONE }, // NOTE: maxDepth = 10 in photon trace stage
+								rt_pip(context, &rt_pipelineCompileOptions, &rt_pipelineLinkOptions, { rt_raygen ,rt_hitRayRadiance, rt_hitShadowRay, rt_hitConnectRay, rt_missRayRadiance, rt_missShadowRay, rt_missConnectRay }),
+								pt_pip(context, &pt_pipelineCompileOptions, &pt_pipelineLinkOptions, { pt_raygen ,pt_closestHit, pt_miss }),
+								lightSourceBuffer(lightSource, false),
+								cameraRayBuffer(Buffer::Device),
+								photonBuffer(Buffer::Device),
+								photonMapBuffer(Buffer::Device),
+								pt_missDataBuffer(Buffer::Device),
+								rt_raygenDataBuffer(rt_raygenData, false),
+								rt_hitDataBuffer(Buffer::Device),
+								rt_missDataBuffer(Buffer::Device),
+								pt_raygenDataBuffer(pt_raygenData, false),
+								pt_hitDataBuffer(pt_hitData, false),
+								rt_sbt({}),
+								pt_sbt({}),
+								frameBuffer(*dr),
+								c_imageBuffer(Buffer::Device),
+								c_indexBuffer(Buffer::Device),
+								parasBuffer(paras, false),
+								//box(_sourceManager->folder.find("resources/room.stl").readSTL()),
+								vertices(Buffer::Device),
+								normals(Buffer::Device),
+								kds(Buffer::Device),
+								NOLT(Buffer::Device),
+								photonMapStartIdxs(Buffer::Device),
+								debugDatas(Buffer::Device),
+								triangleBuildInput({}),
+								accelOptions({}),
+								GASOutput(Buffer::Device),
+								GASHandle(0),
+								photonFlag(true)
 			{
-				box.getVerticesRepeated();
+				/*box.getVerticesRepeated();
 				box.getNormals();
 				box.printInfo(false);
 				vertices.copy(box.verticesRepeated.data, sizeof(Math::vec3<float>)* box.verticesRepeated.length);
-				normals.copy(box.normals.data, sizeof(Math::vec3<float>)* box.normals.length);
+				normals.copy(box.normals.data, sizeof(Math::vec3<float>)* box.normals.length);*/
 
-				float3* kdsTemp = new float3[box.normals.length];
-				for (int c0(0); c0 < box.normals.length; c0++)
-					kdsTemp[c0] = { 0.73f, 0.73f, 0.73f };
-				kdsTemp[20] = make_float3(0.65f, 0.05f, 0.05f);
-				kdsTemp[21] = make_float3(0.65f, 0.05f, 0.05f);
-				kdsTemp[24] = make_float3(0.12f, 0.45f, 0.15f);
-				kdsTemp[25] = make_float3(0.12f, 0.45f, 0.15f);
-				//kdsTemp[box.normals.length - 6] = make_float3(0.65f, 0.05f, 0.05f);
-				//kdsTemp[box.normals.length - 5] = make_float3(0.65f, 0.05f, 0.05f);
-				//kdsTemp[box.normals.length - 10] = make_float3(0.12f, 0.45f, 0.15f);
-				//kdsTemp[box.normals.length - 9] = make_float3(0.12f, 0.45f, 0.15f);
-				kds.copy(kdsTemp, sizeof(float3)* box.normals.length);
+				//float3* kdsTemp = new float3[box.normals.length];
+				//for (int c0(0); c0 < box.normals.length; c0++)
+				//	kdsTemp[c0] = { 0.73f, 0.73f, 0.73f };
+				//kdsTemp[20] = make_float3(0.65f, 0.05f, 0.05f);
+				//kdsTemp[21] = make_float3(0.65f, 0.05f, 0.05f);
+				//kdsTemp[24] = make_float3(0.12f, 0.45f, 0.15f);
+				//kdsTemp[25] = make_float3(0.12f, 0.45f, 0.15f);
+				////kdsTemp[box.normals.length - 6] = make_float3(0.65f, 0.05f, 0.05f);
+				////kdsTemp[box.normals.length - 5] = make_float3(0.65f, 0.05f, 0.05f);
+				////kdsTemp[box.normals.length - 10] = make_float3(0.12f, 0.45f, 0.15f);
+				////kdsTemp[box.normals.length - 9] = make_float3(0.12f, 0.45f, 0.15f);
+				//kds.copy(kdsTemp, sizeof(float3)* box.normals.length);
+				const char name[10][40] = { "resources/room/0.stl", "resources/room/1.stl",
+					"resources/room/2.stl", "resources/room/3.stl", "resources/room/4.stl", "resources/room/5.stl",
+					"resources/room/6.stl", "resources/room/7.stl", "resources/room/8.stl", "resources/room/9.stl" };
+
+				STL* boxs[10] = { NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL };
+				int triangleCnt = 0;
+				for (int i = 0; i < 10; i++)
+				{
+					boxs[i] = new STL(_sourceManager->folder.find(name[i]).readSTL());
+					boxs[i]->getVerticesRepeated();
+					boxs[i]->getNormals();
+					triangleCnt += boxs[i]->normals.length;
+				}
+
+				::printf("Triangle count: %llu\n", triangleCnt);
+				vertices.resize(sizeof(float3) * 3 * triangleCnt);
+				normals.resize(sizeof(float3)* triangleCnt);
+
+				int currentCnt = 0;
+				for (int i = 0; i < 10; i++)
+				{
+					cudaMemcpy((float3*)vertices.device + currentCnt * 3, boxs[i]->verticesRepeated.data, sizeof(float3) * boxs[i]->verticesRepeated.length, cudaMemcpyHostToDevice);
+					cudaMemcpy((float3*)normals.device + currentCnt, boxs[i]->normals.data, sizeof(float3) * boxs[i]->normals.length, cudaMemcpyHostToDevice);
+					currentCnt += boxs[i]->normals.length;
+				}
+
+				float3 sceneColor[10]{ {0.16f, 0.14f, 0.13f},	// ¼üÅÌ¡¢ÆÁÄ»£ºÏóÑÀºÚ
+					{0.70f, 0.09f, 0.12f},	// Êé±¾£ºÓ¡¶Èºì
+					{0.98f, 1.0f, 0.94f},	// ÌÕ´É£ºÏóÑÀ°×
+					{0.69f, 0.88f, 0.9f},	// ×øµæ£ºÇ³»ÒÀ¶É«
+					{0.37f, 0.15f, 0.07f},	// ×ÀÃæ£ºÎÚÔôÄ«×Ø
+					{0.75f, 0.75f, 0.75f},	// ½ðÊô£º»ÒÉ«
+					{0.5f, 0.54f, 0.53f},	// Ö§Öù£ºÀä»Ò
+					{0.73f, 0.73f, 0.73f},	// ÎÝ×ÓÕûÌå
+					{1.0f, 0.5f, 0.0f},		// ¹ñ×Ó£º½Û»Æ
+					{0.12f, 0.45f, 0.15f}	// ÎÄ¼þ£ºÂÌÉ«
+				};
+
+				float3* kdsTemp = new float3[triangleCnt];
+				currentCnt = 0;
+				for (int i = 0; i < 10; i++)
+				{
+					for (int j = 0; j < boxs[i]->normals.length; j++)
+						kdsTemp[currentCnt + j] = sceneColor[i];
+					currentCnt += boxs[i]->normals.length;
+				}
+
+				/*for (int c0(0); c0 < triangleCnt; c0++)
+					kdsTemp[c0] = { 0.73f, 0.73f, 0.73f };*/
+					/*kdsTemp[box.normals.length - 6] = make_float3(0.12f, 0.45f, 0.15f);
+					kdsTemp[box.normals.length - 5] = make_float3(0.12f, 0.45f, 0.15f);
+					kdsTemp[box.normals.length - 10] = make_float3(0.65f, 0.05f, 0.05f);
+					kdsTemp[box.normals.length - 9] = make_float3(0.65f, 0.05f, 0.05f);*/
+
+				kds.copy(kdsTemp, sizeof(float3)* triangleCnt);
 				delete[] kdsTemp;
 
-				lightSource.position = { 0.0f, 0.99f, 0.0f };
-				float lightPower = 10.0f;
-				lightSource.power = { lightPower, lightPower, lightPower };
-				lightSource.direction = { 0.0f, -1.0f, 0.0f };
+				lightSource[0].position = { 0.0f, 2.5f, 0.0f };
+				float lightPower = 12.f;
+				lightSource[0].power = { lightPower, 0.8164f * lightPower, 0.53125f * lightPower };
+				lightSource[0].direction = { 0.0f, -1.0f, 0.0f };
+				lightSource[0].visiableAngle = -1;
+				lightSource[0].accumulatePower = lightSource[0].power.x * 0.299f +
+					lightSource[0].power.y * 0.587f + lightSource[0].power.z * 0.114f;
+
+				lightSource[1].position = { 1.085f, 1.2f, -3.3135f };
+				lightPower = .4f;
+				lightSource[1].power = { 0.1f * lightPower, 0.1f * lightPower, lightPower };
+				lightSource[1].direction = { 0.0f, -1.0f, 0.0f };
+				lightSource[1].visiableAngle = -1;
+				lightSource[1].accumulatePower = lightSource[1].power.x * 0.299f +
+					lightSource[1].power.y * 0.587f + lightSource[1].power.z * 0.114f +
+					lightSource[0].accumulatePower;
+
+				lightSource[2].position = { 0.638f, 1.2f, -3.760f };
+				lightPower = .2f;
+				lightSource[2].power = { 0.1f * lightPower, lightPower, 0.1f * lightPower };
+				lightSource[2].direction = { 0.0f, -1.0f, 0.0f };
+				lightSource[2].visiableAngle = -1;
+				lightSource[2].accumulatePower = lightSource[2].power.x * 0.299f +
+					lightSource[2].power.y * 0.587f + lightSource[2].power.z * 0.114f +
+					lightSource[1].accumulatePower;
+
+				lightSource[3].position = { 0.195f, 1.2f, -4.203f };
+				lightPower = .4f;
+				lightSource[3].power = { lightPower, 0.1f * lightPower, 0.1f * lightPower };
+				lightSource[3].direction = { 0.0f, -1.0f, 0.0f };
+				lightSource[3].visiableAngle = -1;
+				lightSource[3].accumulatePower = lightSource[3].power.x * 0.299f +
+					lightSource[3].power.y * 0.587f + lightSource[3].power.z * 0.114f +
+					lightSource[2].accumulatePower;
+
+				paras.lightSourceNum = 4;
 
 				/*lightSource.type = LightSource::SPOT;
 				lightSource.position = { 0.0f,-0.25f,0.0f };
@@ -179,8 +266,8 @@ namespace CUDA
 				triangleBuildInput.type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
 				triangleBuildInput.triangleArray.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
 				//triangleBuildInput.triangleArray.vertexStrideInBytes = sizeof(Math::vec3<float>);
-				triangleBuildInput.triangleArray.numVertices = box.verticesRepeated.length;
-				triangleBuildInput.triangleArray.vertexBuffers = (CUdeviceptr*)& vertices.device;
+				triangleBuildInput.triangleArray.numVertices = triangleCnt * 3;
+				triangleBuildInput.triangleArray.vertexBuffers = (CUdeviceptr*)&vertices.device;
 				triangleBuildInput.triangleArray.flags = triangle_input_flags;
 				triangleBuildInput.triangleArray.numSbtRecords = 1;
 				triangleBuildInput.triangleArray.sbtIndexOffsetBuffer = 0;
@@ -340,7 +427,7 @@ namespace CUDA
 #endif
 				//Debug();
 				ChangeEye();
- 				frameBuffer.unmap();
+				frameBuffer.unmap();
 			}
 			void UpdateRightEyeInfo(TransInfo* rightEyeTransDevice)
 			{
@@ -401,7 +488,7 @@ namespace CUDA
 				frameBuffer.resize(_gl);
 				c_imageBuffer.resize(sizeof(float3) * _size.h * _size.w);
 				c_indexBuffer.resize(sizeof(int) * _size.h * _size.w);
-				
+
 				frameBuffer.map();
 				c_imageBuffer.map();
 				c_indexBuffer.map();
@@ -589,7 +676,8 @@ namespace OpenGL
 			sm(),
 			renderer(&sm, _size),
 			//test(CUDA::Buffer::Device, 4),
-			trans({ {60},{0.01,0.9,0.005},{0.006},{0,0,5.0f},1400.0 }),
+			trans({ {60},{0.01,0.9,0.005},{0.006},{0,1.f,3.0f},1400.0 }),
+			//trans({ {60},{0.01,0.9,0.005},{0.006},{-0.933f,0.4f,-0.174},1400.0 }),//chair
 			pathTracer(&sm, &renderer, _size, trans.buffer.device),
 			size(_size),
 			frameSizeChanged(false)
@@ -600,6 +688,24 @@ namespace OpenGL
 			test.freeHost();
 			test.moveToHost();
 			::printf("---%f\n", *(float*)test.host);*/
+			//under chair
+			//trans.trans =
+			//{
+			//	{0.043119, -0.439488, 0.897214},
+			//	{0.000898, 0.898065, 0.439861},
+			//	{-0.999070, -0.018161, 0.039118}
+			//};
+			//trans.dr = { 0.175824, 0.251462, -2.719936 };
+
+			//keyboard
+			//trans.trans =
+			//{
+			//	{0.389858, -0.158726, 0.907092},
+			//	{-0.018941, 0.983443, 0.180227},
+			//	{-0.920680, -0.087444, 0.380397}
+			//};
+			//trans.dr = { -0.552125, 0.594734, -2.244329 };
+
 			trans.init(_size);
 		}
 		~PathTracing()
@@ -651,9 +757,9 @@ namespace OpenGL
 		{
 			switch (_button)
 			{
-				case GLFW_MOUSE_BUTTON_LEFT:trans.mouse.refreshButton(0, _action); break;
-				case GLFW_MOUSE_BUTTON_MIDDLE:trans.mouse.refreshButton(1, _action); break;
-				case GLFW_MOUSE_BUTTON_RIGHT:trans.mouse.refreshButton(2, _action); break;
+			case GLFW_MOUSE_BUTTON_LEFT:trans.mouse.refreshButton(0, _action); break;
+			case GLFW_MOUSE_BUTTON_MIDDLE:trans.mouse.refreshButton(1, _action); break;
+			case GLFW_MOUSE_BUTTON_RIGHT:trans.mouse.refreshButton(2, _action); break;
 			}
 		}
 		virtual void mousePos(double _x, double _y)override
@@ -670,16 +776,16 @@ namespace OpenGL
 			{
 				switch (_key)
 				{
-					case GLFW_KEY_ESCAPE:if (_action == GLFW_PRESS)
-						glfwSetWindowShouldClose(_window, true); break;
-					case GLFW_KEY_A:trans.key.refresh(0, _action); break;
-					case GLFW_KEY_D:trans.key.refresh(1, _action); break;
-					case GLFW_KEY_W:trans.key.refresh(2, _action); break;
-					case GLFW_KEY_S:trans.key.refresh(3, _action); break;
-						/*	case GLFW_KEY_UP:monteCarlo.trans.persp.increaseV(0.02); break;
-							case GLFW_KEY_DOWN:monteCarlo.trans.persp.increaseV(-0.02); break;
-							case GLFW_KEY_RIGHT:monteCarlo.trans.persp.increaseD(0.01); break;
-							case GLFW_KEY_LEFT:monteCarlo.trans.persp.increaseD(-0.01); break;*/
+				case GLFW_KEY_ESCAPE:if (_action == GLFW_PRESS)
+					glfwSetWindowShouldClose(_window, true); break;
+				case GLFW_KEY_A:trans.key.refresh(0, _action); break;
+				case GLFW_KEY_D:trans.key.refresh(1, _action); break;
+				case GLFW_KEY_W:trans.key.refresh(2, _action); break;
+				case GLFW_KEY_S:trans.key.refresh(3, _action); break;
+					/*	case GLFW_KEY_UP:monteCarlo.trans.persp.increaseV(0.02); break;
+						case GLFW_KEY_DOWN:monteCarlo.trans.persp.increaseV(-0.02); break;
+						case GLFW_KEY_RIGHT:monteCarlo.trans.persp.increaseD(0.01); break;
+						case GLFW_KEY_LEFT:monteCarlo.trans.persp.increaseD(-0.01); break;*/
 				}
 			}
 		}
@@ -709,8 +815,8 @@ int main()
 		wm.render();
 		wm.swapBuffers();
 		fps.refresh();
-		//fps.printFPSAndFrameTime(2, 3);
-		fps.printAverageFrameTime();
+		fps.printFPSAndFrameTime(2, 3);
+		//fps.printAverageFrameTime();
 		//wm.windows[0].data.setTitle(fps.str);
 	}
 	return 1;

@@ -62,7 +62,7 @@ static __device__ __inline__ void IntersectionIndex()
 	cameraPosition *= paras.z0 / cameraPosition.z;
 	int xIndex = (int)(cameraPosition.x + paras.size.x / 2.0f);
 	int yIndex = (int)(cameraPosition.y + paras.size.y / 2.0f);
-	if(xIndex >= 0 && xIndex < paras.size.x && yIndex >= 0 && yIndex < paras.size.y)
+	if (xIndex >= 0 && xIndex < paras.size.x && yIndex >= 0 && yIndex < paras.size.y)
 		paras.c_index[index.y * paras.size.x + index.x] = yIndex * paras.size.x + xIndex;
 }
 
@@ -81,6 +81,8 @@ extern "C" __global__ void __closesthit__RayRadiance()
 
 	if (fmaxf(hitPointKd) > 0.0f)
 	{
+
+
 		// record cameraRay info
 		CameraRayData& cameraRayData = hitData->cameraRayDatas[index.y * paras.size.x + index.x];
 		cameraRayData.position = hitPointPosition;
@@ -88,33 +90,37 @@ extern "C" __global__ void __closesthit__RayRadiance()
 		cameraRayData.primIdx = primIdx;
 
 		// direct flux
-		float3 lightSourcePosition;
-		LightSource* lightSource = hitData->lightSource;
-
-		lightSourcePosition = lightSource->position;
-
-		float3 shadowRayDir = lightSourcePosition - hitPointPosition;
-
 		float3 directFlux = make_float3(0.0f, 0.0f, 0.0f);
-		float attenuation = 1.0f;
 
-		if (dot(shadowRayDir, hitPointNormal) * dot(rayDir, hitPointNormal) < 0)
+		for (unsigned int c0(0); c0 < paras.lightSourceNum; ++c0)
 		{
-			float Tmax = sqrtf(dot(shadowRayDir, shadowRayDir));
-			shadowRayDir = normalize(shadowRayDir);
-			float cosDN = fabsf(dot(shadowRayDir, hitPointNormal));// NOTE: fabsf?
-	
-			unsigned int pd0, pd1;
-			pP(&attenuation, pd0, pd1);
-			optixTrace(paras.handle, hitPointPosition, shadowRayDir,
-				0.0001f, Tmax,
-				0.0f, OptixVisibilityMask(255), OPTIX_RAY_FLAG_NONE,
-				ShadowRay,        // SBT offset
-				RayCount,           // SBT stride
-				ShadowRay,        // missSBTIndex
-				pd0, pd1);
+			LightSource& lightSource = hitData->lightSource[c0];
+			float3 lightSourcePosition(lightSource.position);
+			float3 shadowRayDir = lightSourcePosition - hitPointPosition;
+			float Tmax2(dot(shadowRayDir, shadowRayDir));
+			float Tmax = sqrtf(Tmax2);
+			shadowRayDir = shadowRayDir / Tmax;
+			float shadowDotHit(dot(shadowRayDir, hitPointNormal));
 
-			directFlux = lightSource->power * attenuation * hitPointKd * cosDN;
+			float attenuation = 1.0f;
+
+			if (-dot(lightSource.direction, shadowRayDir) > lightSource.visiableAngle &&
+				shadowDotHit * dot(rayDir, hitPointNormal) < 0)
+			{
+				unsigned int pd0, pd1;
+				pP(&attenuation, pd0, pd1);
+				optixTrace(paras.handle, hitPointPosition, shadowRayDir,
+					0.0001f, Tmax,
+					0.0f, OptixVisibilityMask(255), OPTIX_RAY_FLAG_NONE,
+					ShadowRay,        // SBT offset
+					RayCount,           // SBT stride
+					ShadowRay,        // missSBTIndex
+					pd0, pd1);
+				float cutoff(10);
+				Tmax2 = 1 / Tmax2;
+				directFlux += lightSource.power * attenuation * hitPointKd * fabsf(shadowDotHit) *
+					(cutoff < Tmax2 ? cutoff : Tmax2);
+			}
 		}
 
 #ifdef USE_CONNECTRAY
@@ -139,7 +145,7 @@ extern "C" __global__ void __closesthit__RayRadiance()
 				paras.c_image[c_index] = 0.1f * directFlux;
 		}
 #endif
-		
+
 
 #ifdef OPTIX_GATHER
 		int hitPointHashValue = hash(hitPointPosition);
@@ -164,7 +170,7 @@ extern "C" __global__ void __closesthit__RayRadiance()
 				float3 diff = hitPointPosition - photon.position;
 				float distance = sqrtf(dot(diff, diff));
 
-				if (distance <= COLLECT_RAIDUS && fabsf(dot(diff, hitPointNormal)) < 0.0001f)
+				if (distance <= COLLECT_RAIDUS)// && fabsf(dot(diff, hitPointNormal)) < 0.0001f)
 				{
 					float Wpc = 1.0f - distance / COLLECT_RAIDUS;
 					indirectFlux += photon.energy * hitPointKd * Wpc;
@@ -176,10 +182,10 @@ extern "C" __global__ void __closesthit__RayRadiance()
 
 		float3 color = indirectFlux;
 #else
-		float3 color = 0.04f * directFlux;
+		float3 color = directFlux;
 #endif
-		//color = 0.1f * directFlux;
-		paras.image[index.y * paras.size.x + index.x] = make_float4(color, 1.0f);
+		color = 0.5f * directFlux;
+		paras.image[index.y * paras.size.x + index.x] = make_float4(color, 0.0f);
 
 #ifdef USE_CONNECTRAY
 		int c_index = paras.c_index[index.y * paras.size.x + index.x];
@@ -196,7 +202,7 @@ extern "C" __global__ void __closesthit__ShadowRay()
 	unsigned int pd0, pd1;
 	pd0 = optixGetPayload_0();
 	pd1 = optixGetPayload_1();
-	* (float*)uP(pd0, pd1) = 0.0f;
+	*(float*)uP(pd0, pd1) = 0.0f;
 }
 
 extern "C" __global__ void __closesthit__ConnectRay()
@@ -242,9 +248,16 @@ extern "C" __global__ void __raygen__PhotonEmit()
 	Pt_RayGenData* raygenData = (Pt_RayGenData*)optixGetSbtDataPointer();
 	LightSource* lightSource = raygenData->lightSource;
 
+	float rd(curand_uniform(&state) * lightSource[paras.lightSourceNum - 1].accumulatePower);
+	unsigned int sourceIdx(0);
+	//
+	for (; sourceIdx < paras.lightSourceNum; ++sourceIdx)
+		if (rd <= lightSource[sourceIdx].accumulatePower)break;
+
 	// cos sampling(should be uniformly sampling a sphere)
-	float3 dir = randomDirectionCosN(normalize(lightSource->direction), 1.0f, &state);
-	float3 position = lightSource->position;
+	float3 dir = randomDirectionCosAngle(normalize(lightSource[sourceIdx].direction),
+		lightSource[sourceIdx].visiableAngle, &state);
+	float3 position = lightSource[sourceIdx].position;
 
 	/*float2 seed = curand_uniform2(&state);
 	float z = 1 - 2 * seed.x;
@@ -265,7 +278,7 @@ extern "C" __global__ void __raygen__PhotonEmit()
 
 	// set ray payload
 	PhotonPrd prd;
-	prd.energy = lightSource->power;
+	prd.energy = lightSource[sourceIdx].power;
 	prd.startIdx = startIdx;
 	prd.numDeposits = 0;
 	prd.depth = 0;
@@ -318,20 +331,16 @@ extern "C" __global__ void __closesthit__PhotonHit()
 		}
 
 		// Russian roulette
-		float Pd = fmaxf(kd);	// probability of being diffused
-		if (curand_uniform(&state) > Pd)
-			return;	// absorb
-
+		float Pd = dot(kd, { 0.299f, 0.587f, 0.114f });	// probability of being diffused
+		if (curand_uniform(&state) > Pd)return;	// absorb
 		prd.energy = kd * prd.energy / Pd;
 
 		// cosine-weighted hemisphere sampling
 		float3 W = { 0.f,0.f,0.f };
-		if (dot(oldDir, hitPointNormal) > 0)
-			W = -normalize(hitPointNormal);
-		else
-			W = normalize(hitPointNormal);
+		if (dot(oldDir, hitPointNormal) > 0)W = -normalize(hitPointNormal);
+		else W = normalize(hitPointNormal);
 
-		newDir = randomDirectionCosN(W, 1.0f, &state);
+		newDir = randomDirectionCosN(W, 0, &state);
 	}
 
 	prd.depth++;
